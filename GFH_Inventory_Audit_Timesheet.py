@@ -2988,10 +2988,10 @@ class GFHApp(tk.Tk):
         _tog_frame.pack(side="right", padx=(0, 18), pady=9)
         _tog_frame._tag = "header"
         self._theme_btn = tk.Button(
-            _tog_frame, text="🌙" if self.theme_manager.current_theme == "dark" else "☀️",
-            bg=self.COLOR_RED, fg="white",
-            activebackground="#c9401a", activeforeground="white",
-            font=("Segoe UI", 10), width=3, relief="flat",
+            _tog_frame, text="\u2600" if self.theme_manager.current_theme == "dark" else "\u263e",
+            bg=self.COLOR_NAVY, fg="white",
+            activebackground=self.COLOR_NAVY, activeforeground="white",
+            font=("Segoe UI Symbol", 13), width=3, relief="flat",
             highlightthickness=0, borderwidth=0,
             command=self._toggle_theme
         )
@@ -3068,7 +3068,7 @@ class GFHApp(tk.Tk):
         self.theme_manager.current_theme = new_theme
         self.theme_manager.save_theme(new_theme)
         if hasattr(self, "_theme_btn"):
-            self._theme_btn.configure(text="🌙" if new_theme == "dark" else "☀️")
+            self._theme_btn.configure(text="\u2600" if new_theme == "dark" else "\u263e")
         self._apply_theme()
 
     def _apply_theme(self, colors=None):
