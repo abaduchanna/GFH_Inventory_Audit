@@ -28,7 +28,7 @@ class FixedHeaderManager:
     """Manages header with centered title, logo, and theme toggle."""
     
     BRAND_NAVY = "#090d26"
-    BRAND_RED = "#f0541c"
+    BRAND_RED = "#e83030"
     
     def __init__(self, parent, title="App", height=108):
         import tkinter as tk  # lazy import

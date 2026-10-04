@@ -2635,7 +2635,7 @@ class GFHApp(tk.Tk):
             pass
 
         self.COLOR_NAVY = "#090d26"   # matches theme_manager.py navy — header blends with logo
-        self.COLOR_RED = "#f0541c"
+        self.COLOR_RED = "#e83030"
         self.COLOR_BG = "#F3F5FA"
         self.COLOR_CARD = "#FFFFFF"
         self.COLOR_TEXT = "#090d26"
