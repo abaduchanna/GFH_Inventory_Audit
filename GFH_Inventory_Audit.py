@@ -2600,10 +2600,13 @@ class GFHApp(tk.Tk):
         s.configure("TLabelframe.Label", background=self.COLOR_BG, foreground=self.COLOR_TEXT, font=("Segoe UI", sz(10), "bold"))
         s.configure("TNotebook", background=self.COLOR_BG, borderwidth=0)
         s.configure("TNotebook.Tab", padding=(18, 9), font=("Segoe UI", sz(10), "bold"), background=self.COLOR_PANEL_ALT, foreground=self.COLOR_TEXT)
+        # Hover must read as brand RED with white text (same pattern as
+        # GFH_Audit_Automation). The old #FFE8EC pale-pink hover read as
+        # "white" — owner-reported: tabs turn white on mouse-over.
         s.map(
             "TNotebook.Tab",
-            background=[("selected", self.COLOR_RED), ("active", "#FFE8EC")],
-            foreground=[("selected", "#FFFFFF"), ("active", self.COLOR_NAVY)],
+            background=[("active", self.COLOR_RED), ("selected", self.COLOR_RED)],
+            foreground=[("active", "#FFFFFF"), ("selected", "#FFFFFF")],
         )
         s.configure("Treeview", rowheight=max(20, round(32 * self.zoom_scale)), font=("Segoe UI", sz(10)), background=self.COLOR_CARD, fieldbackground=self.COLOR_CARD, foreground=self.COLOR_TEXT, bordercolor=self.COLOR_BORDER, borderwidth=1)
         s.configure("Treeview.Heading", font=("Segoe UI", sz(10), "bold"), background=self.COLOR_NAVY, foreground="#FFFFFF", relief="flat")

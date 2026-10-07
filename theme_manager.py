@@ -103,7 +103,15 @@ class ThemeManager:
         style.configure("TEntry", fieldbackground=colors["input"], foreground=colors["text"])
         style.configure("TNotebook", background=colors["bg"])
         style.configure("TNotebook.Tab", background=colors["panel_alt"], foreground=colors["text"], font=("Segoe UI", 9))
-        style.map("TNotebook.Tab", background=[("selected", colors["panel"])])
+        # Hover = brand RED + white text (ecosystem standard). NOTE: ttk .map
+        # REPLACES the whole per-option state list, so this map must carry the
+        # red hover itself — otherwise the hover state falls back to clam's
+        # built-in near-white whenever this pass is the last writer.
+        style.map(
+            "TNotebook.Tab",
+            background=[("active", self.BRAND_RED), ("selected", colors["panel"])],
+            foreground=[("active", self.BRAND_WHITE)],
+        )
         style.configure("Treeview", background=colors["panel"], foreground=colors["text"], fieldbackground=colors["panel"])
         style.configure("Treeview.Heading", background=self.BRAND_NAVY, foreground=self.BRAND_WHITE, font=("Segoe UI", 9, "bold"))
         style.map("Treeview.Heading", background=[("active", self.BRAND_NAVY)], foreground=[("active", self.BRAND_WHITE)])
