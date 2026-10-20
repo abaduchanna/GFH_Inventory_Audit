@@ -2848,6 +2848,19 @@ class GFHApp(tk.Tk):
         except Exception:
             pass
 
+    @staticmethod
+    def _mix_hex(a: str, b: str, t: float) -> str:
+        """Blend two #rrggbb colours (t=0 -> a, t=1 -> b)."""
+        try:
+            ar, ag, ab = (int(a.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+            br, bg, bb = (int(b.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+            return "#{:02x}{:02x}{:02x}".format(
+                round(ar + (br - ar) * t),
+                round(ag + (bg - ag) * t),
+                round(ab + (bb - ab) * t))
+        except Exception:
+            return a
+
     def _apply_styles(self) -> None:
         sz = lambda n: max(6, round(n * self.zoom_scale))
         s = self._style
@@ -2858,14 +2871,15 @@ class GFHApp(tk.Tk):
         s.configure("Header.TLabel", font=("Segoe UI", sz(19), "bold"), background=self.COLOR_NAVY, foreground="#FFFFFF")
         s.configure("BrandSub.TLabel", font=("Segoe UI", sz(10), "bold"), background=self.COLOR_NAVY, foreground="#DCE2F2")
         s.configure("Sub.TLabel", font=("Segoe UI", sz(10)), background=self.COLOR_BG, foreground=self.COLOR_MUTED)
-        # Neutral at rest, brand red only on hover/press (matches GFH Audit
-        # Automation). This mapping is reapplied after every theme switch so
-        # the look never jumps, and toggling back to dark keeps buttons navy
-        # instead of snapping to solid brand red.
+        # Neutral at rest, subtle navy hover/press. NOTE: the hover/press fill
+        # must NOT use the bright brand red — on Windows, ttk+GDI can leave a
+        # stale copy of a red-filled button behind the row (owner saw "double
+        # buttons"). Red stays on borders, tabs and selection only.
+        # This mapping is reapplied after every theme switch so the look never jumps.
         s.configure("TButton", padding=(10, 6), font=("Segoe UI", sz(9), "bold"), background=self.COLOR_PANEL_ALT, foreground=self.COLOR_TEXT, bordercolor=self.COLOR_RED, focusthickness=1, focuscolor=self.COLOR_RED)
         s.map(
             "TButton",
-            background=[("disabled", self.COLOR_PANEL_ALT), ("pressed", "#B8330F"), ("active", self.COLOR_RED)],
+            background=[("disabled", self.COLOR_PANEL_ALT), ("pressed", self._mix_hex(self.COLOR_PANEL_ALT, "#000000", 0.28)), ("active", self._mix_hex(self.COLOR_PANEL_ALT, self.COLOR_TEXT, 0.12))],
             foreground=[("disabled", self.COLOR_MUTED), ("pressed", "#FFFFFF"), ("active", "#FFFFFF")],
             bordercolor=[("disabled", self.COLOR_BORDER), ("pressed", self.COLOR_RED), ("active", self.COLOR_RED)],
         )

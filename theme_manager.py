@@ -14,6 +14,19 @@ from datetime import datetime
 # tkinter availability is verified.
 
 
+def _mix_hex(a: str, b: str, t: float) -> str:
+    """Blend two #rrggbb colours (t=0 -> a, t=1 -> b)."""
+    try:
+        ar, ag, ab = (int(a.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        br, bg, bb = (int(b.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        return "#{:02x}{:02x}{:02x}".format(
+            round(ar + (br - ar) * t),
+            round(ag + (bg - ag) * t),
+            round(ab + (bb - ab) * t))
+    except Exception:
+        return a
+
+
 class ThemeManager:
     """Manages light/dark themes with protected widget tags."""
 
@@ -99,7 +112,14 @@ class ThemeManager:
         style.configure("TLabel", background=colors["bg"], foreground=colors["text"], font=("Segoe UI", 9))
         style.configure("TCombobox", fieldbackground=colors.get("input", "#ffffff"), background=colors.get("panel_alt", "#eef0f6"), foreground=colors.get("text", "#16213a"))
         style.configure("TButton", background=colors["panel_alt"], foreground=colors["text"], font=("Segoe UI", 9))
-        style.map("TButton", background=[("active", self.BRAND_RED)], foreground=[("active", self.BRAND_WHITE)])
+        # Subtle navy hover — NOT brand red. A bright red button fill lets
+        # Windows ttk/GDI leave a stale red "ghost button" behind the row
+        # (owner bug report: double buttons). Red stays on borders/tabs only.
+        style.map(
+            "TButton",
+            background=[("active", _mix_hex(colors["panel_alt"], colors["text"], 0.12))],
+            foreground=[("active", colors["text"])],
+        )
         style.configure("TEntry", fieldbackground=colors["input"], foreground=colors["text"])
         style.configure("TNotebook", background=colors["bg"])
         style.configure("TNotebook.Tab", background=colors["panel_alt"], foreground=colors["text"], font=("Segoe UI", 9))
