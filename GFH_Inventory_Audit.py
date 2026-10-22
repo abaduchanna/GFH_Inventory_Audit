@@ -3045,7 +3045,7 @@ class GFHApp(tk.Tk):
         ttk.Button(form, text="Import XLSX", command=self.import_store_accounts_file).grid(row=0, column=5, padx=(0, 6), pady=3)
         ttk.Button(form, text="Download Template", command=self.download_store_accounts_template).grid(row=0, column=7, padx=(0, 6), pady=3)
         ttk.Button(form, text="Delete Selected", command=self.delete_selected_store_account).grid(row=0, column=6, padx=(0, 6), pady=3)
-        ttk.Button(form, text="Clear Form", command=self.clear_store_form).grid(row=0, column=7, padx=(0, 6), pady=3)
+        ttk.Button(form, text="Clear Form", command=self.clear_store_form).grid(row=0, column=8, padx=(0, 6), pady=3)
 
         # Search bar for Store List
         store_search_box = ttk.Frame(self.store_tab)
@@ -3081,7 +3081,7 @@ class GFHApp(tk.Tk):
         ttk.Button(form, text="Download Template", command=self.download_employees_template).grid(row=0, column=8, padx=(0, 6), pady=3)
         ttk.Button(form, text="Export Excel", command=self.export_employees_file).grid(row=0, column=6, padx=(0, 6), pady=3)
         ttk.Button(form, text="Delete Selected", command=self.delete_selected_sales_rep).grid(row=0, column=7, padx=(0, 6), pady=3)
-        ttk.Button(form, text="Clear Form", command=self.clear_rep_form).grid(row=0, column=8, padx=(0, 6), pady=3)
+        ttk.Button(form, text="Clear Form", command=self.clear_rep_form).grid(row=0, column=9, padx=(0, 6), pady=3)
 
         # Search bar for Employees
         rep_search_box = ttk.Frame(self.rep_tab)
@@ -3751,9 +3751,9 @@ class GFHApp(tk.Tk):
         ttk.Button(form, text="Import XLSX", command=self.import_excluded_imeis_file).grid(row=0, column=11, padx=(0, 4), pady=3)
         ttk.Button(form, text="Download Template", command=self.download_excluded_imeis_template).grid(row=0, column=13, padx=(0, 4), pady=3)
         ttk.Button(form, text="Export Excel", command=self.export_excluded_imeis_file).grid(row=0, column=12, padx=(0, 4), pady=3)
-        ttk.Button(form, text="Delete", command=self.delete_selected_device_exclusion).grid(row=0, column=13, padx=(0, 4), pady=3)
-        ttk.Button(form, text="Delete All", command=self.delete_all_device_exclusions_from_ui).grid(row=0, column=14, padx=(0, 4), pady=3)
-        ttk.Button(form, text="Clear", command=self.clear_device_exclusion_form).grid(row=0, column=15, padx=(0, 4), pady=3)
+        ttk.Button(form, text="Delete", command=self.delete_selected_device_exclusion).grid(row=0, column=14, padx=(0, 4), pady=3)
+        ttk.Button(form, text="Delete All", command=self.delete_all_device_exclusions_from_ui).grid(row=0, column=15, padx=(0, 4), pady=3)
+        ttk.Button(form, text="Clear", command=self.clear_device_exclusion_form).grid(row=0, column=16, padx=(0, 4), pady=3)
 
         # Search bar for Excluded Devices
         exclusion_search_box = ttk.Frame(self.exclusion_tab)
