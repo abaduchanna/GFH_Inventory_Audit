@@ -5325,6 +5325,79 @@ class GFHApp(tk.Tk):
         except Exception as exc:
             messagebox.showerror("Open folder failed", str(exc))
 
+_SINGLE_INSTANCE_MUTEX_HANDLE = None  # module-level ref keeps the OS handle alive for process lifetime
+
+
+def _acquire_single_instance(mutex_name: str) -> bool:
+    """Windows named-mutex single-instance guard.
+
+    Returns True when this process may start (first instance / non-Windows /
+    guard failed open); False when another copy is already running — in that
+    case main() focuses the existing window and exits quietly.
+
+    Why this exists: the one-file EXE unpacks silently for several seconds,
+    so users double-click the icon again while nothing is on screen. Without
+    the guard a second identical window opens at the SAME geometry (see
+    _apply_dynamic_geometry) and stacks pixel-perfect on top of the first —
+    the UI appears to have "double buttons".
+    """
+    global _SINGLE_INSTANCE_MUTEX_HANDLE
+    if not sys.platform.startswith("win"):
+        return True
+    try:
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        ERROR_ALREADY_EXISTS = 183
+        handle = kernel32.CreateMutexW(None, 0, "Global\\" + mutex_name)
+        if not handle:
+            return True  # guard could not be created -> fail open, never brick the app
+        _SINGLE_INSTANCE_MUTEX_HANDLE = handle
+        return ctypes.get_last_error() != ERROR_ALREADY_EXISTS
+    except Exception:
+        return True
+
+
+def _focus_existing_window(title_substring: str, exclude: str = "") -> None:
+    """Best-effort: restore + foreground the already-running instance's window."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        matches = []
+
+        EnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def _on_window(hwnd, _lparam):
+            try:
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                buf = ctypes.create_unicode_buffer(512)
+                user32.GetWindowTextW(hwnd, buf, 512)
+                title = buf.value
+                if title_substring and title_substring.lower() in title.lower():
+                    if exclude and exclude.lower() in title.lower():
+                        return True
+                    matches.append(hwnd)
+            except Exception:
+                pass
+            return True
+
+        user32.EnumWindows(EnumProc(_on_window), None)
+        if not matches:
+            return
+        hwnd = matches[0]
+        SW_RESTORE = 9
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
 def _enable_dpi_awareness() -> None:
     """Make Windows report physical pixels so winfo_screen* is accurate on
     high-DPI displays (1080p, 1440p, 2K, 4K, DPI-scaled laptops)."""
@@ -5341,6 +5414,15 @@ def _enable_dpi_awareness() -> None:
 
 
 def main() -> None:
+    # ── Single-instance guard ───────────────────────────────────────────────
+    # Onefile EXE unpacks silently for seconds; a second double-click used to
+    # open a second identical window at the same geometry, stacked pixel-perfect
+    # on top of the first — the user saw this as "double buttons". Instead of
+    # launching a duplicate, focus the already-running window and exit quietly.
+    if not _acquire_single_instance("GFHTelecom.InventoryAudit.SingleInstance"):
+        _focus_existing_window(APP_NAME, exclude="Timesheet")
+        return
+
     # AppUserModelID MUST be set before GFHApp() — that class inherits
     # tk.Tk so the window is constructed on instantiation. Setting it
     # inside __init__ is already too late; Windows ignores it.
