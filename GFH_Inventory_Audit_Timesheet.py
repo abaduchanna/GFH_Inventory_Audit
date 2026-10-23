@@ -1205,6 +1205,22 @@ def build_inventory_status_rows(
     # transfers employees for count-file stores, yet the timesheet clearly
     # shows who clocked in there.
     ts_store_to_employee = build_ts_store_to_employee(time_sheet_records)
+    # Timesheet district fallback — third layer after the count file and the
+    # Store List (master) so a store known only to the timesheet still gets
+    # its district instead of "Unknown".
+    ts_district_by_store: Dict[str, str] = {}
+    if time_sheet_records:
+        ts_sample = time_sheet_records[0]
+        ts_store_col = find_column(ts_sample, ["Store"])
+        ts_district_col = find_column(ts_sample, ["District"])
+        if ts_store_col and ts_district_col:
+            for rec in time_sheet_records:
+                norm = normalize_store(rec.get(ts_store_col, ""))
+                if not norm:
+                    continue
+                d = normalize_district(rec.get(ts_district_col, ""))
+                if d and d != "Unknown":
+                    ts_district_by_store.setdefault(norm, d)
 
     # Build store display names AND districts directly from count details so
     # every store in the count file appears regardless of timesheet coverage.
@@ -1276,6 +1292,7 @@ def build_inventory_status_rows(
         district = normalize_district(
             count_district_by_store.get(norm)
             or master_district_by_store.get(norm)
+            or ts_district_by_store.get(norm)
             or "Unknown"
         )
         rep_name = safe_text(rep_by_store.get(norm, ""))

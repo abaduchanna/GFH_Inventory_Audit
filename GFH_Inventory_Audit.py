@@ -1087,10 +1087,18 @@ def build_inventory_status_rows(
     master_store_records: Optional[List[Dict[str, str]]] = None,
     source_file: str = "",
 ) -> Tuple[List[InventoryStatusRow], Dict[str, int]]:
+    # District priority chain (fixes the "Unknown" district bug in the
+    # Inventory Audit Status tab):
+    #   1. Count file "District" column (authoritative operational export)
+    #   2. Store List tab (master_store_records) — same source extract_variances
+    #      uses, so Status and Variance always agree
+    #   3. Employee Time Sheet district column (legacy source)
+    #   4. "Unknown" — only when the store is in NONE of the above
     district_by_store, display_by_store, rep_by_store = build_store_maps(time_sheet_records)
     master_display_by_store: Dict[str, str] = dict(display_by_store)
     inv_display_by_store: Dict[str, str] = {}
     completed_store_norms: set[str] = set()
+    count_district_by_store: Dict[str, str] = {}
 
     filtered_records = inventory_records
     latest_metrics = {
@@ -1103,6 +1111,7 @@ def build_inventory_status_rows(
     if inventory_records:
         sample = inventory_records[0]
         store_col = find_column(sample, ["Store"])
+        district_col = find_column(sample, ["District"])
         if store_col:
             filtered_records, latest_metrics = filter_latest_inventory_records(inventory_records)
             for rec in filtered_records:
@@ -1112,12 +1121,41 @@ def build_inventory_status_rows(
                     continue
                 inv_display_by_store[norm] = display_store(store_raw)
                 completed_store_norms.add(norm)
+            # Count file carries its own District column? Collect it for ALL
+            # rows (not just the latest batch) so districts survive even when
+            # a recount batch omits the column value.
+            if district_col:
+                for rec in inventory_records:
+                    norm = normalize_store(rec.get(store_col, ""))
+                    if not norm:
+                        continue
+                    d = normalize_district(rec.get(district_col, ""))
+                    if d and d != "Unknown":
+                        count_district_by_store.setdefault(norm, d)
 
-    all_store_norms = sorted(set(master_display_by_store.keys()) | set(display_by_store.keys()) | set(inv_display_by_store.keys()) | completed_store_norms)
+    # Master store list (Store List tab) merge — mirrors extract_variances so
+    # the Status tab can never end up all-"Unknown" when the time sheet is
+    # empty or missing. Master overrides the timesheet (same as Variance).
+    for rec in master_store_records or []:
+        district = normalize_district(rec.get("District", ""))
+        store = display_store(rec.get("Store", ""))
+        norm = normalize_store(store)
+        if not norm:
+            continue
+        if store:
+            master_display_by_store.setdefault(norm, store)
+        if district and district != "Unknown":
+            district_by_store[norm] = district
+
+    all_store_norms = sorted(set(master_display_by_store.keys()) | set(display_by_store.keys()) | set(inv_display_by_store.keys()) | completed_store_norms | set(count_district_by_store.keys()))
     rows: List[InventoryStatusRow] = []
     for norm in all_store_norms:
-        store = master_display_by_store.get(norm) or display_by_store.get(norm) or inv_display_by_store.get(norm) or norm.title()
-        district = normalize_district(district_by_store.get(norm, "Unknown"))
+        store = inv_display_by_store.get(norm) or master_display_by_store.get(norm) or display_by_store.get(norm) or norm.title()
+        district = normalize_district(
+            count_district_by_store.get(norm)
+            or district_by_store.get(norm)
+            or "Unknown"
+        )
         rep_name = safe_text(rep_by_store.get(norm, ""))
         status = "Completed" if norm in completed_store_norms else "Pending"
         key_raw = f"{norm}|{district}|{status}|status"
