@@ -150,6 +150,11 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import xml.etree.ElementTree as ET
 import base64
 
+# --- 3SVerse runtime tamper guard (t197): frozen EXE main debugger = silent exit ---
+import runtime_guard as _rguard3sv
+
+_rguard3sv.enforce()
+
 try:
     import tkinter as tk
     from theme_manager import ThemeManager, apply_theme_to_window, get_copyright_year

@@ -7,6 +7,7 @@ Copy protection ab sirf build-level layer pe hai:
 
 | Layer | Kya hai | AI ke against kya block karta hai |
 |---|---|---|
+| 2. Runtime guard | `runtime_guard.enforce()` launch pe (sirf frozen EXE): debugger attach = silent exit, koi popup nahi | Live dynamic analysis (x64dbg/x32dbg/unpacking debuggers) = app band |
 | 1. Native compile | `_protect_build.py` build se PEHLE saare modules ko Cython se machine code (.pyd) me compile karta hai, phir .py sources delete. EXE me Python source/bytecode NahiN hota | pyinstxtractor + decompiler = sirf machine code, source kabhi nahi |
 
 (t195: license gate + trial + heartbeat layers is FREE app se REMOVE ho gaye —
