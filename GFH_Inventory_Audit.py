@@ -238,6 +238,25 @@ STATUS_LOGO_PATH = PACKAGE_DIR / "gfh_telecom_llc_logo.png"
 APP_ICON_PATH = PACKAGE_DIR / "gfh_telecom_llc_icon.ico"
 APP_ICON_PNG_PATH = PACKAGE_DIR / "gfh_telecom_llc_logo.png"
 
+
+def _load_report_logo(max_w: float, max_h: float):
+    """t200: brand logo for report images - bundled transparent PNG first.
+
+    STATUS_LOGO_PATH (file next to the EXE) may be an old opaque navy-slab
+    export that visually swamps small reports; GFH_Telecom_Logo.png ships
+    inside the app, has a transparent background and matches the app header.
+    Returns (img_or_None, width, height)."""
+    for src in (HEADER_LOGO_PATH, STATUS_LOGO_PATH):
+        try:
+            if src and Path(str(src)).exists():
+                logo = Image.open(src).convert("RGBA")
+                scale = min(max_w / logo.width, max_h / logo.height)
+                size = (max(1, int(logo.width * scale)), max(1, int(logo.height * scale)))
+                return logo.resize(size), size[0], size[1]
+        except Exception:
+            continue
+    return None, 0, 0
+
 # ---------------------------------------------------------------------------
 # Embedded icon assets — written to PACKAGE_DIR at startup so no external
 # file is needed. Swap the base64 strings to change the window icon.
@@ -2123,17 +2142,7 @@ class ImageRenderer:
         logo_img = None
         logo_w = 0
         logo_h_used = 0
-        if STATUS_LOGO_PATH.exists():
-            try:
-                logo_img = Image.open(STATUS_LOGO_PATH).convert("RGBA")
-                scale = min(640 / logo_img.width, 150 / logo_img.height)
-                size = (max(1, int(logo_img.width * scale)), max(1, int(logo_img.height * scale)))
-                logo_img = logo_img.resize(size)
-                logo_w, logo_h_used = size
-            except Exception:
-                logo_img = None
-                logo_w = 0
-                logo_h_used = 0
+        logo_img, logo_w, logo_h_used = _load_report_logo(250, 70)
 
         header_area_h = max(logo_h_used, 74) + 18
         table_top = margin + header_area_h + 18
@@ -4888,17 +4897,7 @@ class GFHApp(tk.Tk):
         logo_img = None
         logo_w = 0
         logo_h_used = 0
-        if STATUS_LOGO_PATH.exists():
-            try:
-                logo_img = Image.open(STATUS_LOGO_PATH).convert("RGBA")
-                scale = min(560 / logo_img.width, 135 / logo_img.height)
-                size = (max(1, int(logo_img.width * scale)), max(1, int(logo_img.height * scale)))
-                logo_img = logo_img.resize(size)
-                logo_w, logo_h_used = size
-            except Exception:
-                logo_img = None
-                logo_w = 0
-                logo_h_used = 0
+        logo_img, logo_w, logo_h_used = _load_report_logo(230, 64)
 
         header_area_h = max(logo_h_used, 80) + 18
         table_top = margin + header_area_h + 18
@@ -5056,17 +5055,7 @@ class GFHApp(tk.Tk):
         logo_img = None
         logo_w = 0
         logo_h_used = 0
-        if STATUS_LOGO_PATH.exists():
-            try:
-                logo_img = Image.open(STATUS_LOGO_PATH).convert("RGBA")
-                scale = min(620 / logo_img.width, 150 / logo_img.height)
-                size = (max(1, int(logo_img.width * scale)), max(1, int(logo_img.height * scale)))
-                logo_img = logo_img.resize(size)
-                logo_w, logo_h_used = size
-            except Exception:
-                logo_img = None
-                logo_w = 0
-                logo_h_used = 0
+        logo_img, logo_w, logo_h_used = _load_report_logo(240, 68)
 
         header_area_h = max(logo_h_used, 74) + 18
         box_top = margin + header_area_h + 16
