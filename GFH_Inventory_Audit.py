@@ -4878,6 +4878,7 @@ class GFHApp(tk.Tk):
         white = (255, 255, 255)
         district_colors = {
             "Arizona": (196, 138, 230),
+            "Atlanta": (189, 49, 120),
             "Colorado East": (96, 194, 236),
             "Colorado West": (78, 186, 228),
             "Houston": (244, 128, 128),
