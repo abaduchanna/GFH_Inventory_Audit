@@ -150,6 +150,11 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import xml.etree.ElementTree as ET
 import base64
 
+# --- 3SVerse license gate (AI-copy protection retrofit t192) ---
+import license_core as _lic3sv
+if not _lic3sv.ensure_licensed():
+    raise SystemExit(0)
+
 try:
     import tkinter as tk
     from theme_manager import ThemeManager, apply_theme_to_window, get_copyright_year
