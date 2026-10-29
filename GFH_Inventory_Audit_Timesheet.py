@@ -2874,6 +2874,18 @@ class GFHApp(tk.Tk):
             root.minsize(min(1220, max(560, sw // 2)),
                          min(740, max(420, sh // 2)))
             root.resizable(True, True)
+            # Always open maximized: set the zoomed state BEFORE the window
+            # maps, then re-assert it once mapped (Tk can silently drop the
+            # zoomed state while mapping the window).
+            root.state("zoomed")
+            root.after(60, self._reassert_zoomed)
+        except Exception:
+            pass
+
+    def _reassert_zoomed(self) -> None:
+        """Re-assert the maximized state once the window has mapped."""
+        try:
+            self.state("zoomed")
         except Exception:
             pass
 
@@ -6125,7 +6137,20 @@ def main() -> None:
         pass
     _enable_dpi_awareness()
     app = GFHApp()
+    _close_pyi_splash()
     app.mainloop()
+
+
+def _close_pyi_splash():
+    """Close the PyInstaller splash screen (frozen onefile builds only).
+
+    Called once the main window is fully built and shown; harmless no-op
+    in dev runs (pyi_splash only exists inside PyInstaller builds)."""
+    try:
+        import pyi_splash  # type: ignore
+        pyi_splash.close()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
