@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sys
+import os
+import threading
+from pathlib import Path
 from datetime import date
 from logo_handler import LogoHandler
 
@@ -68,46 +71,97 @@ def _auto_install_packages() -> None:
     import sys as _sys
     pkgs = missing_pip
 
-    # Show a quick tk splash so the user knows something is happening
+    # Keep the branded splash responsive while missing packages install.
     try:
         import tkinter as _tk
-        from theme_manager import ThemeManager, apply_theme_to_window, get_copyright_year
+        from tkinter import ttk as _ttk
         _splash = _tk.Tk()
-        _splash.title("GFH Inventory Audit (Timesheet Edition) — Installing packages…")
-        _splash.geometry("540x90")
+        _splash.title("GFH Inventory Audit")
+        _splash_width, _splash_height = 660, 190
+        _splash.geometry(f"{_splash_width}x{_splash_height}")
         _splash.resizable(False, False)
-        _lbl = _tk.Label(
-            _splash,
-            text=f"Installing: {', '.join(pkgs)}\nPlease wait — this runs once only…",
-            font=("Segoe UI", 11), pady=18,
-        )
-        _lbl.pack()
-        _splash.update()
+        _splash.configure(bg="#090d26")
+        _splash.grid_columnconfigure(1, weight=1)
+        _logo_card = _tk.Frame(_splash, bg="#111a36", bd=0,
+                               highlightbackground="#e83030", highlightthickness=1)
+        try:
+            _icon_roots = [getattr(_sys, "_MEIPASS", ""), os.path.dirname(os.path.abspath(__file__))]
+            _icon_path = next((os.path.join(base, name) for base in _icon_roots for name in
+                               ("GFH_icon.ico", "gfh_icon.ico", "GFH_icon_white.ico")
+                               if base and os.path.isfile(os.path.join(base, name))), None)
+            if _icon_path:
+                _splash.iconbitmap(_icon_path)
+        except Exception:
+            pass
+        try:
+            _asset_roots = [getattr(_sys, "_MEIPASS", ""), os.path.dirname(os.path.abspath(__file__))]
+            _logo_path = next((os.path.join(base, "GFH_Telecom_Logo.png") for base in _asset_roots
+                               if base and os.path.isfile(os.path.join(base, "GFH_Telecom_Logo.png"))), None)
+            if not _logo_path:
+                raise FileNotFoundError("GFH_Telecom_Logo.png was not found beside the app or in its bundle")
+            _logo = _tk.PhotoImage(file=_logo_path)
+            _logo_label = _tk.Label(_logo_card, image=_logo, bg="#090d26", bd=0)
+            _logo_label.image = _logo
+            _splash._gfh_logo_image = _logo
+            _logo_label.pack(padx=8, pady=8)
+        except Exception:
+            _tk.Label(_logo_card, text="GFH TELECOM", font=("Segoe UI", 14, "bold"),
+                      fg="#e83030", bg="#111a36", padx=16, pady=24).pack()
+        _logo_card.grid(row=0, column=0, rowspan=2, padx=(22, 14), pady=18)
+        _tk.Label(_splash, text="GFH INVENTORY AUDIT", font=("Segoe UI", 15, "bold"),
+                  fg="white", bg="#090d26").grid(row=0, column=1, sticky="sw", padx=20, pady=(32, 4))
+        _status = _tk.Label(_splash, text=f"Preparing required components: {', '.join(pkgs)}",
+                            font=("Segoe UI", 10), fg="#dce2f2", bg="#090d26",
+                            wraplength=330, justify="left")
+        _status.grid(row=1, column=1, sticky="nw", padx=20)
+        _splash_style = _ttk.Style(_splash)
+        _splash_style.theme_use("clam")
+        _splash_style.configure("GFH.Splash.TProgressbar", troughcolor="#20294a",
+                                background="#e83030", bordercolor="#20294a",
+                                lightcolor="#e83030", darkcolor="#e83030", thickness=8)
+        _progress = _ttk.Progressbar(_splash, mode="indeterminate", length=440,
+                                     style="GFH.Splash.TProgressbar")
+        _progress.grid(row=2, column=0, columnspan=2, padx=32, pady=(14, 20), sticky="ew")
+        _progress.start(12)
+        _splash.update_idletasks()
+        _sx = max(0, (_splash.winfo_screenwidth() - _splash_width) // 2)
+        _sy = max(0, (_splash.winfo_screenheight() - _splash_height) // 2)
+        _splash.geometry(f"{_splash_width}x{_splash_height}+{_sx}+{_sy}")
     except Exception:
         _splash = None
 
-    installers = [
-        [_sys.executable, "-m", "pip", "install", "--quiet"] + pkgs,
-        ["py", "-m", "pip", "install", "--quiet"] + pkgs,
-        ["python", "-m", "pip", "install", "--quiet"] + pkgs,
-        ["python3", "-m", "pip", "install", "--quiet"] + pkgs,
-        ["pip", "install", "--quiet"] + pkgs,
-        ["pip3", "install", "--quiet"] + pkgs,
-    ]
-    success = False
-    for cmd in installers:
+    installer = [_sys.executable, "-m", "pip", "install", "--quiet"] + pkgs
+    result = {"success": False, "error": None}
+    def _install_missing():
         try:
-            r = _sp.run(cmd, capture_output=True, timeout=180)
-            if r.returncode == 0:
-                success = True
-                break
-        except Exception:
-            continue
+            completed = _sp.run(installer, capture_output=True, text=True, timeout=180)
+            result["success"] = completed.returncode == 0
+            result["error"] = (completed.stderr or completed.stdout or "pip exited unsuccessfully")[-1600:]
+        except Exception as exc:
+            result["error"] = str(exc)
+    _installer_thread = threading.Thread(target=_install_missing, daemon=True)
+    _installer_thread.start()
+    if _splash:
+        def _poll_installer():
+            if _installer_thread.is_alive():
+                _splash.after(100, _poll_installer)
+                return
+            _progress.stop()
+            _splash.quit()
+        _splash.protocol("WM_DELETE_WINDOW", lambda: None)
+        _splash.after(100, _poll_installer)
+        _splash.mainloop()
+    else:
+        _installer_thread.join()
+    success = result["success"]
 
     if _splash:
         _splash.destroy()
 
-    if not success:
+    if success:
+        import os as _os
+        _os.execv(_sys.executable, [_sys.executable, *_sys.argv])
+    else:
         try:
             import tkinter as _tk2
             from theme_manager import ThemeManager, apply_theme_to_window, get_copyright_year
@@ -115,7 +169,7 @@ def _auto_install_packages() -> None:
             _r2 = _tk2.Tk(); _r2.withdraw()
             _mb.showerror(
                 "Install failed",
-                f"Could not auto-install: {', '.join(pkgs)}\n\n"
+                f"Could not install: {', '.join(pkgs)}\n\n{result['error'] or ''}\n\n"
                 "Please run manually in a Command Prompt:\n\n"
                 f"    py -m pip install {' '.join(pkgs)}",
             )
@@ -229,7 +283,7 @@ def _resource_path(name: str) -> Path:
 
 
 HEADER_LOGO_PATH = _resource_path("GFH_Telecom_Logo.png")
-STATUS_LOGO_PATH = PACKAGE_DIR / "gfh_telecom_llc_logo.png"
+STATUS_LOGO_PATH = HEADER_LOGO_PATH
 APP_ICON_PATH = PACKAGE_DIR / "gfh_telecom_llc_icon.ico"
 APP_ICON_PNG_PATH = PACKAGE_DIR / "gfh_telecom_llc_logo.png"
 
@@ -2629,6 +2683,18 @@ def show_startup_error(exc: BaseException) -> None:
 
 
 GFH_SQUARE_ICON_B64 = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "gfh_square_icon_b64.txt"), "r").read().strip() if not getattr(sys, "frozen", False) else open(os.path.join(getattr(sys, "_MEIPASS", "."), "assets", "gfh_square_icon_b64.txt"), "r").read().strip()
+
+
+def _maximize_window(window):
+    """Maximize after Tk maps the window; fall back safely on other window managers."""
+    try:
+        if window.winfo_exists():
+            window.state("zoomed")
+    except Exception:
+        try:
+            window.attributes("-zoomed", True)
+        except Exception:
+            pass
 
 
 class GFHApp(tk.Tk):
