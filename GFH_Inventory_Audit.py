@@ -2197,6 +2197,400 @@ class ImageRenderer:
         return path
 
 
+# ── ROBUST WHATSAPP DESKTOP LAYER ───────────────────────────────────────────
+# Root causes of "WhatsApp opens but nothing is typed":
+#  1. _wa_find_hwnd matched ANY window with "WhatsApp" in the title (an Edge
+#     "WhatsApp Web" tab, our own window...), so keystrokes went elsewhere.
+#  2. SetForegroundWindow is silently refused by Windows (foreground lock) and
+#     the result was never checked, so typing started in the wrong window.
+#  3. keybd_event without scan codes / per-char VkKeyScan typing is ignored by
+#     WhatsApp's WebView2 UI; text now goes through the clipboard (Ctrl+V) with
+#     SendInput-Unicode as the fallback.
+# Every step now re-verifies WhatsApp is the foreground window and ABORTS
+# instead of typing into whatever else happens to be in front.
+import ctypes as _wa_ct
+from ctypes import wintypes as _wa_wt
+
+_WA_BROWSER_PROCS = ("msedge", "chrome", "firefox", "brave", "opera",
+                     "iexplore", "vivaldi")
+_WA_SELF_PROCS = ("vidapay", "python")
+_WA_EXT_VKS = (0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E)
+
+
+def _wa_user32():
+    u = _wa_ct.windll.user32
+    u.GetForegroundWindow.restype = _wa_wt.HWND
+    u.GetAncestor.restype = _wa_wt.HWND
+    u.GetAncestor.argtypes = [_wa_wt.HWND, _wa_wt.UINT]
+    return u
+
+
+def _wa_proc_name(pid):
+    """Lower-case exe name of a process id ('' when unknown)."""
+    try:
+        k32 = _wa_ct.windll.kernel32
+        k32.OpenProcess.restype = _wa_ct.c_void_p
+        k32.OpenProcess.argtypes = [_wa_wt.DWORD, _wa_wt.BOOL, _wa_wt.DWORD]
+        k32.QueryFullProcessImageNameW.argtypes = [
+            _wa_ct.c_void_p, _wa_wt.DWORD, _wa_wt.LPWSTR,
+            _wa_ct.POINTER(_wa_wt.DWORD)]
+        k32.CloseHandle.argtypes = [_wa_ct.c_void_p]
+        h = k32.OpenProcess(0x1000, False, pid)   # QUERY_LIMITED_INFORMATION
+        if not h:
+            return ""
+        try:
+            buf = _wa_ct.create_unicode_buffer(520)
+            n = _wa_wt.DWORD(520)
+            if k32.QueryFullProcessImageNameW(h, 0, buf, _wa_ct.byref(n)):
+                return os.path.basename(buf.value).lower()
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        pass
+    return ""
+
+
+def _wa_window_pid(hwnd):
+    pid = _wa_wt.DWORD(0)
+    _wa_user32().GetWindowThreadProcessId(hwnd, _wa_ct.byref(pid))
+    return pid.value
+
+
+def _wa_find_hwnd():
+    """HWND of the real WhatsApp Desktop window (never a browser tab or this
+    app's own window), or None. Minimised windows are included."""
+    if sys.platform != "win32":
+        return None
+    try:
+        u = _wa_user32()
+        own = os.getpid()
+        found = []
+        enum_proc = _wa_ct.WINFUNCTYPE(_wa_wt.BOOL, _wa_wt.HWND, _wa_wt.LPARAM)
+
+        def _cb(hwnd, _lp):
+            try:
+                if not u.IsWindowVisible(hwnd):
+                    return True
+                n = u.GetWindowTextLengthW(hwnd)
+                if n <= 0:
+                    return True
+                buf = _wa_ct.create_unicode_buffer(n + 1)
+                u.GetWindowTextW(hwnd, buf, n + 1)
+                title = buf.value
+                if "whatsapp" not in title.lower():
+                    return True
+                pid = _wa_window_pid(hwnd)
+                if pid == own:
+                    return True
+                pn = _wa_proc_name(pid)
+                if any(b in pn for b in _WA_BROWSER_PROCS):
+                    return True
+                if any(pn.startswith(s) for s in _WA_SELF_PROCS):
+                    return True
+                if "whatsapp" in pn:
+                    score = 0
+                elif pn.startswith("applicationframehost"):
+                    score = 1
+                elif title.strip().lower() == "whatsapp":
+                    score = 2
+                else:
+                    return True
+                found.append((score, hwnd))
+            except Exception:
+                pass
+            return True
+
+        u.EnumWindows(enum_proc(_cb), 0)
+        found.sort(key=lambda t: t[0])
+        return found[0][1] if found else None
+    except Exception:
+        return None
+
+
+def _wa_is_foreground(hwnd):
+    """True when WhatsApp (or its child/core window) owns the foreground."""
+    try:
+        u = _wa_user32()
+        fg = u.GetForegroundWindow()
+        if not fg:
+            return False
+        if fg == hwnd or u.GetAncestor(fg, 2) == hwnd:   # GA_ROOT
+            return True
+        return "whatsapp" in _wa_proc_name(_wa_window_pid(fg))
+    except Exception:
+        return False
+
+
+def _wa_focus_hwnd(hwnd, log=None):
+    """Bring WhatsApp to the foreground and VERIFY it. Returns True/False.
+    Escalates: ALT-tap unlock + AttachThreadInput -> SwitchToThisWindow ->
+    minimise/restore. Only un-minimises when actually minimised, so a snapped
+    or maximised window keeps its layout."""
+    try:
+        u = _wa_user32()
+        k32 = _wa_ct.windll.kernel32
+        try:   # allow this process to take the foreground
+            u.SystemParametersInfoW(0x2001, 0, 0, 0x0002)
+        except Exception:
+            pass
+        if u.IsIconic(hwnd):
+            u.ShowWindow(hwnd, 9)          # SW_RESTORE (from minimised only)
+            time.sleep(0.5)
+        for attempt in range(1, 5):
+            _wa_win32_key_down(0x12)       # ALT tap unlocks SetForegroundWindow
+            _wa_win32_key_up(0x12)
+            fg = u.GetForegroundWindow()
+            fg_thread = u.GetWindowThreadProcessId(fg, None) if fg else 0
+            our_thread = k32.GetCurrentThreadId()
+            wa_thread = u.GetWindowThreadProcessId(hwnd, None)
+            pairs = [(fg_thread, our_thread), (fg_thread, wa_thread)]
+            for a, b in pairs:
+                if a and b and a != b:
+                    u.AttachThreadInput(a, b, True)
+            u.BringWindowToTop(hwnd)
+            u.ShowWindow(hwnd, 5)          # SW_SHOW (keeps maximised state)
+            u.SetForegroundWindow(hwnd)
+            for a, b in pairs:
+                if a and b and a != b:
+                    u.AttachThreadInput(a, b, False)
+            if attempt >= 2:
+                u.SwitchToThisWindow(hwnd, True)
+            if attempt >= 3:
+                u.ShowWindow(hwnd, 6)      # SW_MINIMIZE
+                time.sleep(0.3)
+                u.ShowWindow(hwnd, 9)      # restores previous state
+            time.sleep(0.4)
+            if _wa_is_foreground(hwnd):
+                return True
+    except Exception as exc:
+        if log:
+            log(f"WhatsApp focus error: {exc}")
+    return False
+
+
+def _wa_ensure_focused(log=None):
+    log = log or _wa_log
+    """Find (launching if needed) WhatsApp Desktop, focus it, verify it.
+    Returns hwnd on success, None on failure."""
+    hwnd = _wa_find_hwnd()
+    if hwnd is None:
+        log("WhatsApp Desktop not open — launching...")
+        _wa_launch()
+        for _ in range(40):                # wait up to 20 s for the window
+            time.sleep(0.5)
+            hwnd = _wa_find_hwnd()
+            if hwnd:
+                time.sleep(2.0)            # let the chat list finish loading
+                break
+    if hwnd is None:
+        log("WhatsApp Desktop window not found — is it installed and signed in?")
+        return None
+    for _ in range(3):
+        if _wa_focus_hwnd(hwnd, log):
+            time.sleep(0.4)
+            log("WhatsApp Desktop focused.")
+            return hwnd
+        hwnd = _wa_find_hwnd() or hwnd
+        time.sleep(1.0)
+    hint = ""
+    try:
+        if _wa_ct.windll.shell32.IsUserAnAdmin():
+            hint = (" This app is running as Administrator; Windows blocks it "
+                    "from controlling a normal-user WhatsApp - run both at "
+                    "the same level.")
+    except Exception:
+        pass
+    log("Could not bring WhatsApp Desktop to the front." + hint)
+    return None
+
+
+def _wa_guard(hwnd, log=None):
+    log = log or _wa_log
+    """Re-verify (and re-take) focus right before typing. Never type blind."""
+    if _wa_is_foreground(hwnd):
+        return True
+    log("WhatsApp lost focus — re-focusing...")
+    if _wa_focus_hwnd(hwnd, log):
+        time.sleep(0.3)
+        return True
+    log("WhatsApp is not in front — aborting so nothing is typed elsewhere.")
+    return False
+
+
+# ---- keyboard: scan-code aware key events + Unicode SendInput text ---------
+class _WA_KEYBDINPUT(_wa_ct.Structure):
+    _fields_ = [("wVk", _wa_wt.WORD), ("wScan", _wa_wt.WORD),
+                ("dwFlags", _wa_wt.DWORD), ("time", _wa_wt.DWORD),
+                ("dwExtraInfo", _wa_ct.c_size_t)]
+
+
+class _WA_MOUSEINPUT(_wa_ct.Structure):
+    _fields_ = [("dx", _wa_ct.c_long), ("dy", _wa_ct.c_long),
+                ("mouseData", _wa_wt.DWORD), ("dwFlags", _wa_wt.DWORD),
+                ("time", _wa_wt.DWORD), ("dwExtraInfo", _wa_ct.c_size_t)]
+
+
+class _WA_INPUT(_wa_ct.Structure):
+    class _U(_wa_ct.Union):
+        _fields_ = [("ki", _WA_KEYBDINPUT), ("mi", _WA_MOUSEINPUT)]
+    _anonymous_ = ("u",)
+    _fields_ = [("type", _wa_wt.DWORD), ("u", _U)]
+
+
+def _wa_send_key(vk, scan, flags):
+    inp = _WA_INPUT(type=1)
+    inp.ki = _WA_KEYBDINPUT(vk, scan, flags, 0, 0)
+    _wa_ct.windll.user32.SendInput(1, _wa_ct.byref(inp), _wa_ct.sizeof(inp))
+
+
+def _wa_win32_key_down(vk_code):
+    scan = _wa_ct.windll.user32.MapVirtualKeyW(vk_code, 0)
+    _wa_send_key(vk_code, scan, 0x1 if vk_code in _WA_EXT_VKS else 0)
+
+
+def _wa_win32_key_up(vk_code):
+    scan = _wa_ct.windll.user32.MapVirtualKeyW(vk_code, 0)
+    _wa_send_key(vk_code, scan, 0x2 | (0x1 if vk_code in _WA_EXT_VKS else 0))
+
+
+def _wa_win32_hotkey(*keys):
+    codes = []
+    for k in keys:
+        kl = k.lower()
+        if kl in _WA_VK_MAP:
+            codes.append(_WA_VK_MAP[kl])
+        elif len(k) == 1:
+            codes.append(ord(k.upper()))
+        else:
+            return
+    for c in codes:
+        _wa_win32_key_down(c)
+        time.sleep(0.04)
+    time.sleep(0.04)
+    for c in reversed(codes):
+        _wa_win32_key_up(c)
+        time.sleep(0.04)
+
+
+def _wa_win32_press(key):
+    kl = key.lower()
+    if kl in _WA_VK_MAP:
+        code = _WA_VK_MAP[kl]
+    elif len(key) == 1:
+        code = ord(key.upper())
+    else:
+        return
+    _wa_win32_key_down(code)
+    time.sleep(0.04)
+    _wa_win32_key_up(code)
+    time.sleep(0.04)
+
+
+def _wa_win32_write(text, interval=0.0):
+    """Type text as Unicode characters (layout independent, any language)."""
+    for ch in str(text):
+        for up in (0, 2):
+            _wa_send_key(0, ord(ch), 0x4 | up)      # KEYEVENTF_UNICODE
+        time.sleep(max(0.01, interval))
+
+
+def _wa_set_clipboard_text(text):
+    """Put plain text on the clipboard via ctypes (no pyperclip needed)."""
+    u = _wa_ct.windll.user32
+    k = _wa_ct.windll.kernel32
+    k.GlobalAlloc.argtypes = [_wa_wt.UINT, _wa_ct.c_size_t]
+    k.GlobalAlloc.restype = _wa_ct.c_void_p
+    k.GlobalLock.argtypes = [_wa_ct.c_void_p]
+    k.GlobalLock.restype = _wa_ct.c_void_p
+    k.GlobalUnlock.argtypes = [_wa_ct.c_void_p]
+    u.OpenClipboard.argtypes = [_wa_ct.c_void_p]
+    u.SetClipboardData.argtypes = [_wa_wt.UINT, _wa_ct.c_void_p]
+    u.SetClipboardData.restype = _wa_ct.c_void_p
+    data = (str(text) + "\x00").encode("utf-16-le")
+    for _ in range(10):                      # clipboard may be briefly busy
+        if u.OpenClipboard(None):
+            break
+        time.sleep(0.05)
+    else:
+        return False
+    try:
+        u.EmptyClipboard()
+        h = k.GlobalAlloc(0x0002, len(data))
+        if not h:
+            return False
+        p = k.GlobalLock(h)
+        _wa_ct.memmove(p, data, len(data))
+        k.GlobalUnlock(h)
+        return bool(u.SetClipboardData(13, h))   # CF_UNICODETEXT
+    finally:
+        u.CloseClipboard()
+
+
+
+_WA_LOGGER = None
+
+
+def _wa_log(msg):
+    try:
+        (_WA_LOGGER or print)(msg)
+    except Exception:
+        pass
+
+
+def _wa_launch():
+    """Open WhatsApp Desktop (several methods)."""
+    import subprocess as _sp
+    for cmd in (["explorer.exe", "whatsapp:"],
+                "start whatsapp:",
+                r'explorer.exe "shell:AppsFolder\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"'):
+        try:
+            _sp.Popen(cmd, shell=isinstance(cmd, str))
+            return
+        except Exception:
+            continue
+
+
+def _wa_active_guard():
+    """Never type blind: WhatsApp must be the foreground window right now."""
+    hwnd = _wa_find_hwnd()
+    if hwnd is None:
+        raise RuntimeError("WhatsApp Desktop window not found - nothing was typed.")
+    if not _wa_guard(hwnd):
+        raise RuntimeError("WhatsApp Desktop is not in front - nothing was typed.")
+
+
+def _wa_paste_text(text):
+    """Enter text into the focused field: clipboard + Ctrl+V, falling back to
+    Unicode typing (guarded)."""
+    _wa_active_guard()
+    try:
+        if _wa_set_clipboard_text(text):
+            time.sleep(0.2)
+            _wa_win32_hotkey("ctrl", "v")
+            time.sleep(0.3)
+            return
+    except Exception:
+        pass
+    _wa_win32_write(text, 0.02)
+
+
+def _wa_hotkey(*keys):
+    _wa_active_guard()
+    _wa_win32_hotkey(*keys)
+
+
+def _wa_press(key):
+    _wa_active_guard()
+    _wa_win32_press(key)
+
+
+def _wa_write(text, interval=0.0):
+    _wa_active_guard()
+    _wa_win32_write(text, interval)
+# ── END ROBUST WHATSAPP DESKTOP LAYER ───────────────────────────────────────
+
+
+
 class WhatsAppSender:
     def __init__(self, status_callback=None, mode="desktop"):
         self.status_callback = status_callback or (lambda text: None)
@@ -2208,29 +2602,11 @@ class WhatsAppSender:
         self.status_callback(text)
 
     def _force_focus_whatsapp(self) -> bool:
-        """Focus WhatsApp Desktop window using ctypes (most reliable on Win10/11)."""
-        try:
-            import ctypes
-            import win32gui
-            found = []
-            def _cb(hwnd, _):
-                if win32gui.IsWindowVisible(hwnd) and "whatsapp" in (win32gui.GetWindowText(hwnd) or "").lower():
-                    found.append(hwnd)
-            win32gui.EnumWindows(_cb, None)
-            if found:
-                hwnd = found[0]
-                # Only un-minimize WhatsApp. If it is MAXIMIZED, leave it
-                # maximized - calling SW_RESTORE on a zoomed window
-                # un-maximizes it, and WhatsApp visibly re-flows its whole
-                # layout on every send ("window layout changed").
-                if ctypes.windll.user32.IsIconic(hwnd):
-                    ctypes.windll.user32.ShowWindow(hwnd, 9)   # SW_RESTORE
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-                time.sleep(1.0)
-                return True
-        except Exception:
-            pass
-        return self._activate_whatsapp_window()  # pygetwindow fallback
+        """Find WhatsApp Desktop (launching it if needed), bring it to the front
+        and VERIFY it is the foreground window. False => nothing may be typed."""
+        global _WA_LOGGER
+        _WA_LOGGER = self.log
+        return _wa_ensure_focused(self.log) is not None
 
     @staticmethod
     def _import_pyautogui():
@@ -2304,7 +2680,7 @@ class WhatsAppSender:
         time.sleep(0.7)
         _wa_hotkey("ctrl", "a")
         time.sleep(0.2)
-        _wa_write(group_name, interval=0.01)
+        _wa_paste_text(group_name)
         time.sleep(1.2)
         _wa_press("enter")
         time.sleep(1.5)
@@ -2314,12 +2690,7 @@ class WhatsAppSender:
         text = safe_text(text)
         if not text:
             return
-        try:
-            import pyperclip
-            pyperclip.copy(text)
-            _wa_hotkey("ctrl", "v")
-        except Exception:
-            _wa_write(text, interval=0.01)
+        _wa_paste_text(text)
 
     def send_image(self, group_name: str, image_path: Path, text_message: str = "") -> None:
         if self.mode == "web":
@@ -2328,7 +2699,8 @@ class WhatsAppSender:
         pyautogui = self._import_pyautogui()
         self.log(f"Opening WhatsApp Desktop for {group_name}...")
         self._open_whatsapp()
-        self._force_focus_whatsapp()
+        if not self._force_focus_whatsapp():
+            raise RuntimeError("Could not bring WhatsApp Desktop to the front - nothing was typed.")
         self.log(f"Searching group: {group_name}")
         self._type_group_search(pyautogui, group_name)
 
@@ -2369,7 +2741,8 @@ class WhatsAppSender:
         pyautogui = self._import_pyautogui()
         self.log(f"Opening WhatsApp Desktop for {group_name}...")
         self._open_whatsapp()
-        self._force_focus_whatsapp()
+        if not self._force_focus_whatsapp():
+            raise RuntimeError("Could not bring WhatsApp Desktop to the front - nothing was typed.")
         self.log(f"Searching group: {group_name}")
         self._type_group_search(pyautogui, group_name)
         self.log("Sending WhatsApp text message...")
@@ -2421,6 +2794,7 @@ GFH_SQUARE_ICON_B64 = open(os.path.join(os.path.dirname(os.path.abspath(__file__
 class GFHApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        _vp_hide(self)
         self.title(APP_NAME)
         self._app_icon = None
         # Windows groups windows in the taskbar by process/AppUserModelID;
@@ -5501,8 +5875,36 @@ def main() -> None:
         pass
     _enable_dpi_awareness()
     app = GFHApp()
+    _vp_reveal(app)
     _close_pyi_splash()
     app.mainloop()
+
+
+def _vp_hide(win):
+    """ANTI-FLASH: keep the window fully transparent while the UI is built, so a
+    half-built window never flashes behind the boot splash."""
+    try:
+        win.attributes("-alpha", 0.0)
+    except Exception:
+        pass
+    try:
+        import pyi_splash  # type: ignore
+        pyi_splash.update_text("Loading interface...")
+    except Exception:
+        pass
+
+
+def _vp_reveal(win):
+    """Show the finished window in one step (called just before the splash closes)."""
+    try:
+        win.update_idletasks()
+    except Exception:
+        pass
+    try:
+        win.attributes("-alpha", 1.0)
+        win.lift()
+    except Exception:
+        pass
 
 
 def _close_pyi_splash():

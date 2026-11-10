@@ -103,8 +103,10 @@ splash = Splash(
     'splash_timesheet.png',
     binaries=a.binaries,
     datas=a.datas,
-    text_pos=None,
-    text_size=12,
+    text_pos=(60, 316),
+    text_size=11,
+    text_color='#96a8cd',
+    text_default='Starting...',
     minify_script=True,
     always_on_top=True,
 )
