@@ -33,7 +33,7 @@ What this app does
 9. Keeps a SQLite log of cleared, pending, and sent variance status.
 
 Recommended install on Windows:
-    py -m pip install pillow pyautogui pyperclip pywin32 pygetwindow openpyxl
+    py -m pip install pillow pyautogui pywin32 pygetwindow openpyxl
 
 Store list and employee phone numbers are stored in the local SQLite database. Store list and employees can be imported from XLSX. WhatsApp group names are saved in the database and configurable per district. WhatsApp sends captions together with images. Final district result sending is available per district. Starting message and 3-reminder sending for uncleared variances is supported.
 
@@ -54,7 +54,6 @@ def _auto_install_packages() -> None:
         ("PIL",         "pillow"),
         ("openpyxl",    "openpyxl"),
         ("pyautogui",   "pyautogui"),
-        ("pyperclip",   "pyperclip"),
         ("win32api",    "pywin32"),
         ("pygetwindow", "pygetwindow"),
     ]
