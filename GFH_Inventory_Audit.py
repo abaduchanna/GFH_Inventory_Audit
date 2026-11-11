@@ -2146,18 +2146,25 @@ class ImageRenderer:
         clean_mode = safe_text(mode).replace("manual_", "").replace("pending_", "")
         mode_label = SEND_MODE_LABELS.get(clean_mode, clean_mode.replace("_", " ").title())
 
-        draw.text((margin, margin + 4), "GFH Inventory Variance", fill=dark, font=title_font)
-        draw.text(
-            (margin, margin + 48),
-            f"{mode_label}: {batch_title}   Rows: {len(rows)}   Generated: {now_text()}",
-            fill=gray,
-            font=sub_font,
-        )
+        # Standard GFH header: logo + red divider on the left, heading
+        # CENTERED across the full width (matches every other GFH/VDS app
+        # window's header layout) - was logo-on-the-right, title left-aligned.
+        title_text = "GFH Inventory Variance"
+        sub_text = f"{mode_label}: {batch_title}   Rows: {len(rows)}   Generated: {now_text()}"
+        title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
+        title_w = title_bbox[2] - title_bbox[0]
+        sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
+        sub_w = sub_bbox[2] - sub_bbox[0]
+        draw.text(((width - title_w) // 2, margin + 4), title_text, fill=dark, font=title_font)
+        draw.text(((width - sub_w) // 2, margin + 48), sub_text, fill=gray, font=sub_font)
 
         if logo_img is not None:
-            logo_x = width - margin - logo_w
-            logo_y = margin
+            logo_x = margin
+            logo_y = margin + (max(logo_h_used, 74) - logo_h_used) // 2
             img.paste(logo_img, (logo_x, logo_y), logo_img)
+            divider_x = margin + logo_w + 14
+            draw.rectangle(
+                (divider_x, margin, divider_x + 3, margin + max(logo_h_used, 74)), fill=red)
 
         y = table_top
         x = margin
@@ -5474,13 +5481,22 @@ class GFHApp(tk.Tk):
         img = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(img)
 
-        draw.text((margin, margin + 4), "GFH Inventory Variance", fill=dark, font=title_font)
-        draw.text((margin, margin + 48), f"{district}   Generated: {now_text()}", fill=gray, font=sub_font)
+        title_text = "GFH Inventory Variance"
+        sub_text = f"{district}   Generated: {now_text()}"
+        title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
+        title_w = title_bbox[2] - title_bbox[0]
+        sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
+        sub_w = sub_bbox[2] - sub_bbox[0]
+        draw.text(((width - title_w) // 2, margin + 4), title_text, fill=dark, font=title_font)
+        draw.text(((width - sub_w) // 2, margin + 48), sub_text, fill=gray, font=sub_font)
 
         if logo_img is not None:
-            logo_x = width - margin - logo_w
-            logo_y = margin
+            logo_x = margin
+            logo_y = margin + (max(logo_h_used, 74) - logo_h_used) // 2
             img.paste(logo_img, (logo_x, logo_y), logo_img)
+            divider_x = margin + logo_w + 14
+            draw.rectangle(
+                (divider_x, margin, divider_x + 3, margin + max(logo_h_used, 74)), fill=red)
 
         draw.rectangle((margin, box_top, width - margin, box_top + 160), outline=border, fill=(255, 255, 255))
         draw.rectangle((margin, box_top, width - margin, box_top + 46), fill=red)
