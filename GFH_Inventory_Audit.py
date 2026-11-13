@@ -2118,6 +2118,8 @@ class ImageRenderer:
         red = (233, 27, 47)
         light = (246, 247, 249)
         border = (215, 218, 223)
+        navy = (9, 13, 38)
+        white = (255, 255, 255)
 
         logo_img = None
         logo_w = 0
@@ -2125,7 +2127,7 @@ class ImageRenderer:
         if STATUS_LOGO_PATH.exists():
             try:
                 logo_img = Image.open(STATUS_LOGO_PATH).convert("RGBA")
-                scale = min(640 / logo_img.width, 150 / logo_img.height)
+                scale = min(150 / logo_img.width, 56 / logo_img.height)
                 size = (max(1, int(logo_img.width * scale)), max(1, int(logo_img.height * scale)))
                 logo_img = logo_img.resize(size)
                 logo_w, logo_h_used = size
@@ -2134,8 +2136,13 @@ class ImageRenderer:
                 logo_w = 0
                 logo_h_used = 0
 
-        header_area_h = max(logo_h_used, 74) + 18
-        table_top = margin + header_area_h + 18
+        # Standard GFH brand bar (matches gfh_inventory_aging_processor's
+        # wa_render_table_image and every other GFH/VDS app's window header):
+        # navy bar, logo + red divider on the left, title centered in white.
+        # Previously this was a white background with the logo/divider just
+        # floating on it and black text - not the navy bar every other app uses.
+        brand_bar_h = 90
+        table_top = brand_bar_h + 18
         table_height = 54 + sum(row_heights)
         height = table_top + table_height + 58
 
@@ -2145,25 +2152,22 @@ class ImageRenderer:
         clean_mode = safe_text(mode).replace("manual_", "").replace("pending_", "")
         mode_label = SEND_MODE_LABELS.get(clean_mode, clean_mode.replace("_", " ").title())
 
-        # Standard GFH header: logo + red divider on the left, heading
-        # CENTERED across the full width (matches every other GFH/VDS app
-        # window's header layout) - was logo-on-the-right, title left-aligned.
+        draw.rectangle([0, 0, width, brand_bar_h], fill=navy)
+        logo_right_edge = margin
+        if logo_img is not None:
+            img.paste(logo_img, (margin, (brand_bar_h - logo_h_used) // 2), logo_img)
+            logo_right_edge = margin + logo_w
+        divider_x = logo_right_edge + 14
+        draw.rectangle([divider_x, 14, divider_x + 3, brand_bar_h - 14], fill=red)
+
         title_text = "GFH Inventory Variance"
         sub_text = f"{mode_label}: {batch_title}   Rows: {len(rows)}   Generated: {now_text()}"
         title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
         title_w = title_bbox[2] - title_bbox[0]
         sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
         sub_w = sub_bbox[2] - sub_bbox[0]
-        draw.text(((width - title_w) // 2, margin + 4), title_text, fill=dark, font=title_font)
-        draw.text(((width - sub_w) // 2, margin + 48), sub_text, fill=gray, font=sub_font)
-
-        if logo_img is not None:
-            logo_x = margin
-            logo_y = margin + (max(logo_h_used, 74) - logo_h_used) // 2
-            img.paste(logo_img, (logo_x, logo_y), logo_img)
-            divider_x = margin + logo_w + 14
-            draw.rectangle(
-                (divider_x, margin, divider_x + 3, margin + max(logo_h_used, 74)), fill=red)
+        draw.text(((width - title_w) // 2, 16), title_text, fill=white, font=title_font)
+        draw.text(((width - sub_w) // 2, 16 + 38), sub_text, fill=white, font=sub_font)
 
         y = table_top
         x = margin
@@ -5280,6 +5284,11 @@ class GFHApp(tk.Tk):
         light_green = (210, 240, 214)
         pending_fill = (238, 230, 177)
         white = (255, 255, 255)
+        # Standard GFH brand bar colors (matches gfh_inventory_aging_processor's
+        # wa_render_table_image and every other GFH/VDS app's window header):
+        # navy bar, logo + red divider on the left, title centered in white.
+        navy = (9, 13, 38)
+        red = (232, 48, 48)
         district_colors = {
             "Arizona": (196, 138, 230),
             "Atlanta": (189, 49, 120),
@@ -5297,7 +5306,7 @@ class GFHApp(tk.Tk):
         if STATUS_LOGO_PATH.exists():
             try:
                 logo_img = Image.open(STATUS_LOGO_PATH).convert("RGBA")
-                scale = min(560 / logo_img.width, 135 / logo_img.height)
+                scale = min(150 / logo_img.width, 56 / logo_img.height)
                 size = (max(1, int(logo_img.width * scale)), max(1, int(logo_img.height * scale)))
                 logo_img = logo_img.resize(size)
                 logo_w, logo_h_used = size
@@ -5306,41 +5315,33 @@ class GFHApp(tk.Tk):
                 logo_w = 0
                 logo_h_used = 0
 
-        header_area_h = max(logo_h_used, 80) + 18
-        table_top = margin + header_area_h + 18
+        brand_bar_h = 90   # matches FixedHeaderManager's standard GFH header height
+        table_top = brand_bar_h + 18
         height = table_top + 26 + row_h * len(rows) + 24
 
         img = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(img)
 
+        draw.rectangle([0, 0, width, brand_bar_h], fill=navy)
+        logo_right_edge = margin
+        if logo_img is not None:
+            img.paste(logo_img, (margin, (brand_bar_h - logo_h_used) // 2), logo_img)
+            logo_right_edge = margin + logo_w
+        divider_x = logo_right_edge + 14
+        draw.rectangle([divider_x, 14, divider_x + 3, brand_bar_h - 14], fill=red)
+
         title_text = "GFH Inventory Audit"
         today = dt.datetime.now()
         date_text = f"{today.month}/{today.day}/{today.year}"
+        if safe_text(batch_title):
+            date_text += f"   {safe_text(batch_title)}"
 
-        # Measure each string so we can center it horizontally
         title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
         title_w = title_bbox[2] - title_bbox[0]
-        date_bbox = draw.textbbox((0, 0), date_text, font=cell_bold)
+        date_bbox = draw.textbbox((0, 0), date_text, font=sub_font)
         date_w = date_bbox[2] - date_bbox[0]
-
-        title_x = (width - title_w) // 2
-        title_y = margin + 6
-        draw.text((title_x, title_y), title_text, fill=black, font=title_font)
-
-        date_x = (width - date_w) // 2
-        draw.text((date_x, title_y + 40), date_text, fill=black, font=cell_bold)
-
-        if safe_text(batch_title):
-            bt_text = safe_text(batch_title)
-            bt_bbox = draw.textbbox((0, 0), bt_text, font=sub_font)
-            bt_w = bt_bbox[2] - bt_bbox[0]
-            bt_x = (width - bt_w) // 2
-            draw.text((bt_x, title_y + 40 + 26), bt_text, fill=black, font=sub_font)
-
-        if logo_img is not None:
-            logo_x = width - margin - logo_w
-            logo_y = margin
-            img.paste(logo_img, (logo_x, logo_y), logo_img)
+        draw.text(((width - title_w) // 2, 16), title_text, fill=white, font=title_font)
+        draw.text(((width - date_w) // 2, 16 + 36), date_text, fill=white, font=sub_font)
 
         y = table_top
         x = margin
