@@ -18,6 +18,8 @@ jobs:
         app:
           - GFH_Inventory_Audit
           - GFH_Inventory_Audit_Timesheet
+          - GFH_Inventory_Audit_Qt
+          - GFH_Inventory_Audit_Timesheet_Qt
 
     steps:
       - name: Checkout
