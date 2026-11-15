@@ -6006,7 +6006,12 @@ def main() -> None:
     # open a second identical window at the same geometry, stacked pixel-perfect
     # on top of the first — the user saw this as "double buttons". Instead of
     # launching a duplicate, focus the already-running window and exit quietly.
-    if not _acquire_single_instance("GFHTelecom.InventoryAudit.SingleInstance"):
+    # Qt-specific mutex name: the Tk build uses the identical name without
+    # ".Qt" - since both are now shipped side by side, reusing one name meant
+    # whichever build opened first held the mutex and the OTHER build's exe
+    # silently exited thinking a duplicate of itself was already running
+    # (main() just returns with no window and no error on that path).
+    if not _acquire_single_instance("GFHTelecom.InventoryAudit.Qt.SingleInstance"):
         _focus_existing_window(APP_NAME, exclude="Timesheet")
         return
 
