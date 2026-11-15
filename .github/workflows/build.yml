@@ -46,11 +46,11 @@ jobs:
         shell: bash
         run: |
           python -m PyInstaller "${{ matrix.app }}.spec" --noconfirm --clean
-          if [ ! -f "dist/${{ matrix.app }}/${{ matrix.app }}.exe" ]; then
-            echo "::error::Build failed - dist/${{ matrix.app }}/${{ matrix.app }}.exe not found"
+          if [ ! -f "dist/${{ matrix.app }}.exe" ]; then
+            echo "::error::Build failed - dist/${{ matrix.app }}.exe not found"
             exit 1
           fi
-          ls -la "dist/${{ matrix.app }}"
+          ls -la dist/
 
       # Code signing (sigstore) - needs the id-token: write permission above
       # for keyless OIDC signing; without it this silently failed before.
@@ -60,23 +60,17 @@ jobs:
       - name: Sign EXE with sigstore
         shell: bash
         run: |
-          cd "dist/${{ matrix.app }}"
+          cd dist
           echo "Signing ${{ matrix.app }}.exe..."
           python -m sigstore sign "${{ matrix.app }}.exe"
         continue-on-error: true
 
-      - name: Zip build output
-        shell: bash
-        run: |
-          cd dist
-          7z a -tzip "${{ matrix.app }}.zip" "${{ matrix.app }}"
-
-      - name: Upload build artifact
+      - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: exe-${{ matrix.app }}
-          path: dist/${{ matrix.app }}.zip
+          path: dist/${{ matrix.app }}.exe
           if-no-files-found: error
 
   release:
@@ -89,13 +83,13 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: List downloaded builds
+      - name: List downloaded EXEs
         id: list_artifacts
         run: |
           ls -la dist/
           {
             echo "files<<EOF"
-            for f in dist/*.zip; do
+            for f in dist/*.exe; do
               echo "- $(basename "$f")"
             done
             echo "EOF"
@@ -114,5 +108,5 @@ jobs:
 
             Artifacts:
             ${{ steps.list_artifacts.outputs.files }}
-          files: dist/*.zip
+          files: dist/*.exe
           make_latest: true

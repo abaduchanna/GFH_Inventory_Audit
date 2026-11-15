@@ -96,23 +96,22 @@ if errorlevel 1 (
 
 echo    SUCCESS: GFH_Inventory_Audit_Timesheet
 
-REM Copy the onedir output folder (exe + its DLLs) to output
-if exist "dist\GFH_Inventory_Audit_Timesheet\GFH_Inventory_Audit_Timesheet.exe" (
+REM Copy .exe to output
+if exist "dist\GFH_Inventory_Audit_Timesheet.exe" (
     if not exist "%OUTDIR%" mkdir "%OUTDIR%"
-    if exist "%OUTDIR%\GFH_Inventory_Audit_Timesheet" rmdir /s /q "%OUTDIR%\GFH_Inventory_Audit_Timesheet"
-    xcopy /E /I /Y "dist\GFH_Inventory_Audit_Timesheet" "%OUTDIR%\GFH_Inventory_Audit_Timesheet" >nul
+    copy /Y "dist\GFH_Inventory_Audit_Timesheet.exe" "%OUTDIR%\GFH_Inventory_Audit_Timesheet.exe" >nul
     if errorlevel 1 (
-        echo    WARNING: could not copy GFH_Inventory_Audit_Timesheet folder - close the running exe and rebuild.
+        echo    WARNING: could not overwrite GFH_Inventory_Audit_Timesheet.exe - close the running exe and rebuild.
     ) else (
-        echo    Collected: %OUTDIR%\GFH_Inventory_Audit_Timesheet\GFH_Inventory_Audit_Timesheet.exe
+        echo    Collected: %OUTDIR%\GFH_Inventory_Audit_Timesheet.exe
     )
 ) else (
-    echo    WARNING: dist\GFH_Inventory_Audit_Timesheet\GFH_Inventory_Audit_Timesheet.exe not found
+    echo    WARNING: dist\GFH_Inventory_Audit_Timesheet.exe not found
 )
 
 echo.
 echo  ============================================================
-echo   Done: GFH_Inventory_Audit_Timesheet\GFH_Inventory_Audit_Timesheet.exe  (source commit !BUILD_COMMIT!)
+echo   Done: GFH_Inventory_Audit_Timesheet.exe  (source commit !BUILD_COMMIT!)
 echo  ============================================================
 echo.
 pause
