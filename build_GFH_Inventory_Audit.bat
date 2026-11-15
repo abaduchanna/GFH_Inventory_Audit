@@ -24,7 +24,7 @@ REM -- Protect sources: compile every local module to native extensions -------
 REM  (no Python source and no decompilable bytecode ships inside the EXE)
 echo    Protecting sources (compiling to native extensions)...
 python -m pip install --quiet cython pyflakes 2>nul
-python _protect_build.py
+python _protect_build.py GFH_Inventory_Audit.spec
 if errorlevel 1 (
     echo    FAILED: source protection (_protect_build.py)
     pause
@@ -96,22 +96,23 @@ if errorlevel 1 (
 
 echo    SUCCESS: GFH_Inventory_Audit
 
-REM Copy .exe to output
-if exist "dist\GFH_Inventory_Audit.exe" (
+REM Copy the onedir output folder (exe + its DLLs) to output
+if exist "dist\GFH_Inventory_Audit\GFH_Inventory_Audit.exe" (
     if not exist "%OUTDIR%" mkdir "%OUTDIR%"
-    copy /Y "dist\GFH_Inventory_Audit.exe" "%OUTDIR%\GFH_Inventory_Audit.exe" >nul
+    if exist "%OUTDIR%\GFH_Inventory_Audit" rmdir /s /q "%OUTDIR%\GFH_Inventory_Audit"
+    xcopy /E /I /Y "dist\GFH_Inventory_Audit" "%OUTDIR%\GFH_Inventory_Audit" >nul
     if errorlevel 1 (
-        echo    WARNING: could not overwrite GFH_Inventory_Audit.exe - close the running exe and rebuild.
+        echo    WARNING: could not copy GFH_Inventory_Audit folder - close the running exe and rebuild.
     ) else (
-        echo    Collected: %OUTDIR%\GFH_Inventory_Audit.exe
+        echo    Collected: %OUTDIR%\GFH_Inventory_Audit\GFH_Inventory_Audit.exe
     )
 ) else (
-    echo    WARNING: dist\GFH_Inventory_Audit.exe not found
+    echo    WARNING: dist\GFH_Inventory_Audit\GFH_Inventory_Audit.exe not found
 )
 
 echo.
 echo  ============================================================
-echo   Done: GFH_Inventory_Audit.exe  (source commit !BUILD_COMMIT!)
+echo   Done: GFH_Inventory_Audit\GFH_Inventory_Audit.exe  (source commit !BUILD_COMMIT!)
 echo  ============================================================
 echo.
 pause

@@ -366,20 +366,42 @@ def deprotect():
 def main():
     dry = "--dry-run" in sys.argv
 
+    all_specs = sorted(p for p in ROOT.glob("*.spec"))
+    if not all_specs:
+        die("no .spec files found in repo root")
+
+    # Optional: restrict to the spec(s) actually being built this run (pass
+    # the .spec filename(s) as CLI args). Each local build otherwise
+    # protects every spec in the repo together - including entry points
+    # from toolkit variants not being built this run - which means every
+    # single local build writes native-compiled files for the whole app
+    # suite into the (often ransomware-monitored, e.g. Downloads) checkout
+    # directory instead of just the files the running .bat actually needs.
+    requested = [a for a in sys.argv[1:] if a.endswith(".spec")]
+    if requested:
+        wanted = {Path(s).name for s in requested}
+        specs = [p for p in all_specs if p.name in wanted]
+        if not specs:
+            die(f"none of the requested spec files found in repo root: {sorted(wanted)}")
+    else:
+        specs = all_specs
+    spec_key = ",".join(sorted(p.name for p in specs))
+
     if MARKER.is_file():
+        marker_text = MARKER.read_text(encoding="utf-8").strip()
+        proto_part, _, covered_part = marker_text.partition("|")
         try:
-            proto = int(MARKER.read_text(encoding="utf-8").strip())
+            proto = int(proto_part)
         except Exception:
             proto = 0
-        if proto >= PROTO:
-            log("already protected (marker present) - nothing to do")
+        if proto >= PROTO and covered_part == spec_key:
+            log("already protected for this exact spec set (marker present) - nothing to do")
             return 0
-        log(f"protection proto {proto} is older than {PROTO} - redoing from a clean state")
+        if proto >= PROTO:
+            log("marker covers a different spec set than requested - redoing from a clean state")
+        else:
+            log(f"protection proto {proto} is older than {PROTO} - redoing from a clean state")
         deprotect()
-
-    specs = sorted(p for p in ROOT.glob("*.spec"))
-    if not specs:
-        die("no .spec files found in repo root")
 
     # ---- collect entry scripts from all specs -------------------------
     entries = []
@@ -585,7 +607,7 @@ def main():
         spec.write_text(spec_patches[spec.name], encoding="utf-8")
         log(f"{spec.name}: patched")
 
-    MARKER.write_text(str(PROTO), encoding="utf-8")
+    MARKER.write_text(f"{PROTO}|{spec_key}", encoding="utf-8")
     # Local builds only: restore the deleted .py files from git so the
     # developer's working tree keeps its sources. (The compiled .pyd
     # extensions still take import precedence over the .py files, and the

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -45,34 +46,37 @@ jobs:
         shell: bash
         run: |
           python -m PyInstaller "${{ matrix.app }}.spec" --noconfirm --clean
-          if [ ! -f "dist/${{ matrix.app }}.exe" ]; then
-            echo "::error::Build failed - dist/${{ matrix.app }}.exe not found"
+          if [ ! -f "dist/${{ matrix.app }}/${{ matrix.app }}.exe" ]; then
+            echo "::error::Build failed - dist/${{ matrix.app }}/${{ matrix.app }}.exe not found"
             exit 1
           fi
-          ls -la dist/
+          ls -la "dist/${{ matrix.app }}"
 
-      # Code signing (sigstore)
+      # Code signing (sigstore) - needs the id-token: write permission above
+      # for keyless OIDC signing; without it this silently failed before.
       - name: Install sigstore
         run: python -m pip install sigstore
 
-      - name: Sign EXE files with sigstore
+      - name: Sign EXE with sigstore
+        shell: bash
+        run: |
+          cd "dist/${{ matrix.app }}"
+          echo "Signing ${{ matrix.app }}.exe..."
+          python -m sigstore sign "${{ matrix.app }}.exe"
+        continue-on-error: true
+
+      - name: Zip build output
         shell: bash
         run: |
           cd dist
-          for exe in *.exe; do
-            if [ -f "$exe" ]; then
-              echo "Signing $exe..."
-              python -m sigstore sign "$exe" || echo "WARNING: sigstore failed"
-            fi
-          done
-        continue-on-error: true
+          7z a -tzip "${{ matrix.app }}.zip" "${{ matrix.app }}"
 
-      - name: Upload EXE artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: exe-${{ matrix.app }}
-          path: dist/${{ matrix.app }}.exe
+          path: dist/${{ matrix.app }}.zip
           if-no-files-found: error
 
   release:
@@ -85,13 +89,13 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: List downloaded EXEs
+      - name: List downloaded builds
         id: list_artifacts
         run: |
           ls -la dist/
           {
             echo "files<<EOF"
-            for f in dist/*.exe; do
+            for f in dist/*.zip; do
               echo "- $(basename "$f")"
             done
             echo "EOF"
@@ -110,5 +114,5 @@ jobs:
 
             Artifacts:
             ${{ steps.list_artifacts.outputs.files }}
-          files: dist/*.exe
+          files: dist/*.zip
           make_latest: true
