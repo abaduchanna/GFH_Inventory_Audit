@@ -71,11 +71,6 @@ from typing import Dict, Iterable, List, Optional, Tuple
 import xml.etree.ElementTree as ET
 import base64
 
-# --- 3SVerse runtime tamper guard (t197): frozen EXE main debugger = silent exit ---
-import runtime_guard as _rguard3sv
-
-_rguard3sv.enforce()
-
 # ── Required package availability ──────────────────────────────────────────
 # The Tkinter build auto-installed missing packages behind a Tk splash
 # (see _auto_install_packages there). This Qt build follows the sibling
