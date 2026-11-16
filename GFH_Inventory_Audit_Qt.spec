@@ -45,6 +45,8 @@ a = Analysis(
         'openpyxl',
         'pyautogui',
         'pygetwindow',
+        'win32api',
+        'pywintypes',
         'win32clipboard',
         'win32con',
         'theme_manager_qt',

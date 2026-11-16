@@ -40,6 +40,10 @@ a = Analysis(
         'PIL',
         'openpyxl',
         'pyautogui',
+        'win32api',
+        'pywintypes',
+        'win32con',
+        'win32clipboard',
     ] + _openpyxl_hidden,
     hookspath=[],
     hooksconfig={
