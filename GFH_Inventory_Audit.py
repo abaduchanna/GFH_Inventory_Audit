@@ -5454,6 +5454,8 @@ class GFHApp(tk.Tk):
         gray = (95, 95, 102)
         red = (233, 27, 47)
         border = (215, 218, 223)
+        navy = (9, 13, 38)
+        white = (255, 255, 255)
 
         logo_img = None
         logo_w = 0
@@ -5461,7 +5463,7 @@ class GFHApp(tk.Tk):
         if STATUS_LOGO_PATH.exists():
             try:
                 logo_img = Image.open(STATUS_LOGO_PATH).convert("RGBA")
-                scale = min(620 / logo_img.width, 150 / logo_img.height)
+                scale = min(150 / logo_img.width, 56 / logo_img.height)
                 size = (max(1, int(logo_img.width * scale)), max(1, int(logo_img.height * scale)))
                 logo_img = logo_img.resize(size)
                 logo_w, logo_h_used = size
@@ -5470,8 +5472,10 @@ class GFHApp(tk.Tk):
                 logo_w = 0
                 logo_h_used = 0
 
-        header_area_h = max(logo_h_used, 74) + 18
-        box_top = margin + header_area_h + 16
+        # Standard GFH brand bar (matches gfh_inventory_aging_processor's
+        # wa_render_table_image and every other GFH/VDS app's window header).
+        brand_bar_h = 90
+        box_top = brand_bar_h + 16
         height = box_top + 190 + 40
         img = Image.new("RGB", (width, height), "white")
         draw = ImageDraw.Draw(img)
@@ -5482,16 +5486,16 @@ class GFHApp(tk.Tk):
         title_w = title_bbox[2] - title_bbox[0]
         sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
         sub_w = sub_bbox[2] - sub_bbox[0]
-        draw.text(((width - title_w) // 2, margin + 4), title_text, fill=dark, font=title_font)
-        draw.text(((width - sub_w) // 2, margin + 48), sub_text, fill=gray, font=sub_font)
-
+        draw.rectangle([0, 0, width, brand_bar_h], fill=navy)
+        logo_right_edge = margin
         if logo_img is not None:
-            logo_x = margin
-            logo_y = margin + (max(logo_h_used, 74) - logo_h_used) // 2
-            img.paste(logo_img, (logo_x, logo_y), logo_img)
-            divider_x = margin + logo_w + 14
-            draw.rectangle(
-                (divider_x, margin, divider_x + 3, margin + max(logo_h_used, 74)), fill=red)
+            img.paste(logo_img, (margin, (brand_bar_h - logo_h_used) // 2), logo_img)
+            logo_right_edge = margin + logo_w
+        divider_x = logo_right_edge + 14
+        draw.rectangle([divider_x, 14, divider_x + 3, brand_bar_h - 14], fill=red)
+
+        draw.text(((width - title_w) // 2, 16), title_text, fill=white, font=title_font)
+        draw.text(((width - sub_w) // 2, 16 + 38), sub_text, fill=white, font=sub_font)
 
         draw.rectangle((margin, box_top, width - margin, box_top + 160), outline=border, fill=(255, 255, 255))
         draw.rectangle((margin, box_top, width - margin, box_top + 46), fill=red)
