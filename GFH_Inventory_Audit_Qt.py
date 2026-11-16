@@ -2784,7 +2784,7 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QRadioButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QTabWidget, QGroupBox, QSplitter, QMessageBox, QFileDialog,
-    QInputDialog, QFrame,
+    QInputDialog, QFrame, QSizePolicy,
 )
 
 from header_manager_qt import FixedHeaderManagerQt
@@ -3075,6 +3075,7 @@ class MainWindow(QMainWindow):
         self._file_row(grid, 1, "Employee_Time_Sheet", self.time_sheet_edit, self.pick_time_sheet)
         load_btn = QPushButton("Load Variances")
         load_btn.clicked.connect(self.load_variances)
+        load_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         grid.addWidget(load_btn, 0, 3, 2, 1)
         # + / − zoom buttons stacked vertically (+ on top, − on bottom)
         zoom_frame = QWidget()
@@ -3136,6 +3137,7 @@ class MainWindow(QMainWindow):
         grid.addWidget(edit, row, 1)
         browse_btn = QPushButton("Browse")
         browse_btn.clicked.connect(command)
+        browse_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         grid.addWidget(browse_btn, row, 2)
 
     def _apply_theme(self, colors=None) -> None:
@@ -3336,8 +3338,8 @@ class MainWindow(QMainWindow):
                          ("Open Folder", self.open_app_folder)):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             brow.addWidget(btn)
-        brow.addStretch(1)
         controls_col.addLayout(brow)
         tab_outer.addWidget(controls)
 
@@ -3350,14 +3352,14 @@ class MainWindow(QMainWindow):
                                    ("Rep", "status_search_rep", 100)):
             srow.addWidget(QLabel(label + ":"))
             edit = QLineEdit()
-            edit.setFixedWidth(width)
+            edit.setMinimumWidth(width)
+            edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             edit.textChanged.connect(lambda _t: self.refresh_status_table())
             setattr(self, attr + "_edit", edit)
             srow.addWidget(edit)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear_status_search)
         srow.addWidget(clear_btn)
-        srow.addStretch(1)
         tab_outer.addWidget(search_box)
 
         legend = QLabel("Colors: Yellow = Pending, Blue = Completed after updated sheet load, Green = Completed and sent to WhatsApp.")
@@ -3400,7 +3402,6 @@ class MainWindow(QMainWindow):
         self.include_cleared_check = QCheckBox("Show cleared")
         self.include_cleared_check.toggled.connect(lambda _on: self.refresh_table())
         grid.addWidget(self.include_cleared_check, 0, 7)
-        grid.setColumnStretch(8, 1)
         # Row 1: actions
         for col, (text, fn) in enumerate((
                 ("Check Current Filter", self.auto_check_audit_rows),
@@ -3418,7 +3419,10 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(fn)
             # Two button rows - 11 buttons in one grid row overflow narrow
             # windows and Qt squeezes them until the labels clip mid-word.
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             grid.addWidget(btn, 1 if col < 6 else 2, col if col < 6 else col - 6)
+            if col < 6:
+                grid.setColumnStretch(col, 1)
         tab_outer.addWidget(send_box)
 
         action_box = QGroupBox("Final Send Actions")
@@ -3430,15 +3434,17 @@ class MainWindow(QMainWindow):
         arow.addSpacing(12)
         start_btn = QPushButton("Send Starting Message")
         start_btn.clicked.connect(self.send_starting_message)
+        start_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         arow.addWidget(start_btn)
         for n in (1, 2, 3):
             btn = QPushButton(f"Send Reminder {n}")
             btn.clicked.connect(lambda _c=False, num=n: self.send_reminder(num))
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             arow.addWidget(btn)
         final_btn = QPushButton("Send Final District Result")
         final_btn.clicked.connect(self.send_final_district_result)
+        final_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         arow.addWidget(final_btn)
-        arow.addStretch(1)
         tab_outer.addWidget(action_box)
 
         search_box = QGroupBox("Search Variance Rows")
@@ -3451,14 +3457,14 @@ class MainWindow(QMainWindow):
                                    ("Rep", "audit_search_rep", 85)):
             srow.addWidget(QLabel(label + ":"))
             edit = QLineEdit()
-            edit.setFixedWidth(width)
+            edit.setMinimumWidth(width)
+            edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             edit.textChanged.connect(lambda _t: self.refresh_table())
             setattr(self, attr + "_edit", edit)
             srow.addWidget(edit)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear_audit_search)
         srow.addWidget(clear_btn)
-        srow.addStretch(1)
         tab_outer.addWidget(search_box)
 
         legend = QLabel("Colors: Yellow = Pending variance, Blue = Sent to WhatsApp, Green = Cleared.")
@@ -3503,7 +3509,9 @@ class MainWindow(QMainWindow):
                 ("Clear Form", self.clear_store_form)), start=4):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             grid.addWidget(btn, 0, col)
+            grid.setColumnStretch(col, 1)
         tab_outer.addWidget(form)
 
         store_search_box = QWidget()
@@ -3511,13 +3519,13 @@ class MainWindow(QMainWindow):
         srow.setContentsMargins(0, 0, 0, 0)
         srow.addWidget(QLabel("Search:"))
         self.store_search_edit = QLineEdit()
-        self.store_search_edit.setFixedWidth(290)
+        self.store_search_edit.setMinimumWidth(290)
+        self.store_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.store_search_edit.textChanged.connect(lambda _t: self.refresh_store_accounts_table())
         srow.addWidget(self.store_search_edit)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: (self.store_search_edit.clear(), self.refresh_store_accounts_table()))
         srow.addWidget(clear_btn)
-        srow.addStretch(1)
         tab_outer.addWidget(store_search_box)
 
         self.store_tree = self._make_table(["District", "Store"], [220, 360])
@@ -3551,7 +3559,9 @@ class MainWindow(QMainWindow):
                 ("Clear Form", self.clear_rep_form)), start=4):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             grid.addWidget(btn, 0, col)
+            grid.setColumnStretch(col, 1)
         tab_outer.addWidget(form)
 
         rep_search_box = QWidget()
@@ -3559,13 +3569,13 @@ class MainWindow(QMainWindow):
         srow.setContentsMargins(0, 0, 0, 0)
         srow.addWidget(QLabel("Search:"))
         self.rep_search_edit = QLineEdit()
-        self.rep_search_edit.setFixedWidth(290)
+        self.rep_search_edit.setMinimumWidth(290)
+        self.rep_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.rep_search_edit.textChanged.connect(lambda _t: self.refresh_sales_reps_table())
         srow.addWidget(self.rep_search_edit)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: (self.rep_search_edit.clear(), self.refresh_sales_reps_table()))
         srow.addWidget(clear_btn)
-        srow.addStretch(1)
         tab_outer.addWidget(rep_search_box)
 
         self.rep_tree = self._make_table(["Employee Name", "Phone Number"], [320, 220])
@@ -4056,8 +4066,8 @@ class MainWindow(QMainWindow):
         save_mode_btn.clicked.connect(
             lambda: (self.db.save_setting("whatsapp_mode", self.wa_mode_var),
                      self.set_status(f"WhatsApp mode saved: {self.wa_mode_var}")))
+        save_mode_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         mrow.addWidget(save_mode_btn)
-        mrow.addStretch(1)
         tab_outer.addWidget(mode_box)
 
         # Side-by-side layout using a splitter (Tk PanedWindow port)
@@ -4094,8 +4104,8 @@ class MainWindow(QMainWindow):
                          ("Clear", self.clear_wg_form)):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             wg_btns.addWidget(btn)
-        wg_btns.addStretch(1)
         wg_l.addWidget(wg_btn_row)
         left_l.addWidget(wg_form)
 
@@ -4140,8 +4150,8 @@ class MainWindow(QMainWindow):
                          ("Clear", self.clear_dm_form)):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             dm_btns.addWidget(btn)
-        dm_btns.addStretch(1)
         dm_l.addWidget(dm_btn_row)
         right_l.addWidget(form)
 
@@ -4308,8 +4318,8 @@ class MainWindow(QMainWindow):
                          ("Clear", self.clear_device_exclusion_form)):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             brow.addWidget(btn)
-        brow.addStretch(1)
         grid.addWidget(btn_row, 1, 0, 1, 8)
         tab_outer.addWidget(form)
 
@@ -4318,13 +4328,13 @@ class MainWindow(QMainWindow):
         srow.setContentsMargins(0, 0, 0, 0)
         srow.addWidget(QLabel("Search:"))
         self.exclusion_search_edit = QLineEdit()
-        self.exclusion_search_edit.setFixedWidth(290)
+        self.exclusion_search_edit.setMinimumWidth(290)
+        self.exclusion_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.exclusion_search_edit.textChanged.connect(lambda _t: self.refresh_device_exclusions_table())
         srow.addWidget(self.exclusion_search_edit)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: (self.exclusion_search_edit.clear(), self.refresh_device_exclusions_table()))
         srow.addWidget(clear_btn)
-        srow.addStretch(1)
         tab_outer.addWidget(exclusion_search_box)
 
         self.exclusion_tree = self._make_table(["District", "Product", "IMEI", "Comments"], [160, 400, 220, 420])
@@ -5949,12 +5959,6 @@ def _vp_hide(win):
         win.setWindowOpacity(0.0)
     except Exception:
         pass
-    try:
-        import pyi_splash  # type: ignore
-        pyi_splash.update_text("Loading interface...")
-    except Exception:
-        pass
-
 
 def _vp_reveal(win):
     """Show the finished window in one step (called just before the splash closes)."""
@@ -5981,10 +5985,13 @@ def _close_pyi_splash():
 def main() -> None:
     _enable_dpi_awareness()
     app = QApplication(sys.argv)
+    from boot_splash_qt import show_boot_splash
+    _boot = show_boot_splash("#e83030")
     _check_required_packages(app)
     win = MainWindow()
     win.show()
     _vp_reveal(win)
+    _boot.finish(win)
     _close_pyi_splash()
     sys.exit(app.exec())
 
