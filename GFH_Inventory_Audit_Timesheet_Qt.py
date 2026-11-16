@@ -3024,6 +3024,38 @@ class UIBridge(QObject):
     refresh_status = Signal()
 
 
+class _TkFillTable(QTableWidget):
+    """QTableWidget whose columns always fill the table width.
+
+    ttk.Treeview columns default to stretch=True: each column starts at
+    its configured width and any spare width is shared equally between
+    them, so the heading row always spans the whole table. A plain
+    QTableWidget keeps the fixed widths and leaves the rest of the header
+    empty - this ports the Tk behavior."""
+
+    _base_widths = ()
+
+    def set_base_widths(self, widths) -> None:
+        self._base_widths = tuple(int(w) for w in widths)
+        self._fill_columns()
+
+    def _fill_columns(self) -> None:
+        base = self._base_widths
+        if not base:
+            return
+        spare = self.viewport().width() - sum(base)
+        add, rest = divmod(max(0, spare), len(base))
+        header = self.horizontalHeader()
+        last = len(base) - 1
+        for col, width in enumerate(base):
+            if col < self.columnCount():
+                header.resizeSection(col, width + add + (rest if col == last else 0))
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._fill_columns()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -3261,7 +3293,7 @@ class MainWindow(QMainWindow):
         self.refresh_whatsapp_groups_table()
         self.refresh_device_exclusions_table()
 
-        # Status bar — fixed light bar with navy text, same colors as the Tk build.
+        # Status bar — colors follow the active theme (set in _apply_theme).
         self.status_bar = QLabel(self.status_text)
         self.status_bar.setStyleSheet("background:#E9ECF5; color:#090d26; padding:6px;")
         body_layout.addWidget(self.status_bar)
@@ -3283,6 +3315,12 @@ class MainWindow(QMainWindow):
         # walks all top-level widgets; this pins the main window).
         try:
             sync_titlebar_qt(self, dark=(self.theme_manager.current_theme == "dark"))
+        except Exception:
+            pass
+        try:
+            self.status_bar.setStyleSheet(
+                f"background:{colors.get('panel_alt', colors['panel'])}; "
+                f"color:{colors['text']}; padding:6px;")
         except Exception:
             pass
         self.COLOR_BG = colors["bg"]
@@ -3350,7 +3388,7 @@ class MainWindow(QMainWindow):
     def _make_table(self, headers, widths, multi_select=False) -> QTableWidget:
         """ttk.Treeview(show='headings') -> QTableWidget. Same headings,
         same column widths, read-only, row selection, Qt-native scrollbars."""
-        table = QTableWidget(0, len(headers))
+        table = _TkFillTable(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -3361,6 +3399,7 @@ class MainWindow(QMainWindow):
         table.setTextElideMode(Qt.ElideRight)
         for col, width in enumerate(widths):
             table.setColumnWidth(col, width)
+        table.set_base_widths(widths)
         return table
 
     def _wire_sorting(self, table) -> None:
