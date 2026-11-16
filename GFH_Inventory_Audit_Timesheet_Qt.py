@@ -142,29 +142,28 @@ def _choose_app_dir() -> Path:
             pass
         return candidate
     except Exception as e:
-        pass
-    # Qt port of the Tkinter build's messagebox: a QApplication usually
-    # does not exist yet at import time, so fall back to stderr.
-    try:
-        from PySide6.QtWidgets import QApplication, QMessageBox
-        _app = QApplication.instance()
-        if _app is not None:
-            QMessageBox.critical(
-                None,
-                "Folder not writable",
-                f"Cannot write to the data folder:\n"
-                f"  {candidate}\n\n"
-                f"Error: {e}\n\n"
+        # Qt port of the Tkinter build's messagebox: a QApplication usually
+        # does not exist yet at import time, so fall back to stderr.
+        try:
+            from PySide6.QtWidgets import QApplication, QMessageBox
+            _app = QApplication.instance()
+            if _app is not None:
+                QMessageBox.critical(
+                    None,
+                    "Folder not writable",
+                    f"Cannot write to the data folder:\n"
+                    f"  {candidate}\n\n"
+                    f"Error: {e}\n\n"
+                    f"Please ensure the folder is writable.",
+                )
+            else:
+                raise RuntimeError("no QApplication")
+        except Exception:
+            print(
+                f"Cannot write to the data folder:\n  {candidate}\n\nError: {e}\n\n"
                 f"Please ensure the folder is writable.",
+                file=sys.stderr,
             )
-        else:
-            raise RuntimeError("no QApplication")
-    except Exception:
-        print(
-            f"Cannot write to the data folder:\n  {candidate}\n\nError: {e}\n\n"
-            f"Please ensure the folder is writable.",
-            file=sys.stderr,
-        )
     raise SystemExit(1)
 
 APP_DIR = _choose_app_dir()
