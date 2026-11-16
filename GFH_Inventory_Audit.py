@@ -178,60 +178,32 @@ if getattr(sys, "frozen", False):
 else:
     PACKAGE_DIR = Path(__file__).resolve().parent
 PORTABLE_APP_DIR = PACKAGE_DIR / "GFH_Inventory_Audit_Data"
-STABLE_APP_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "GFH_Inventory_Audit"
 LEGACY_APP_DIR = Path.home() / "GFH_Inventory_Variance_GUI"
 
-def _migrate_portable_data(dest: Path) -> None:
-    """One-time copy of any pre-existing data from the old next-to-EXE
-    location into the new stable one, so upgrading doesn't look like data loss."""
-    marker = dest / ".migrated_from_portable"
-    if marker.exists() or not PORTABLE_APP_DIR.exists() or PORTABLE_APP_DIR == dest:
-        return
-    try:
-        import shutil
-        for item in PORTABLE_APP_DIR.iterdir():
-            target = dest / item.name
-            if target.exists():
-                continue
-            if item.is_file():
-                shutil.copy2(item, target)
-        marker.write_text("ok", encoding="utf-8")
-    except Exception:
-        pass
-
 def _choose_app_dir() -> Path:
-    """Place the live data folder (DB included) under %LOCALAPPDATA%, not next
-    to the EXE: the EXE is routinely rebuilt/overwritten in place (e.g. from a
-    Downloads\\GitHub checkout churned by git reset/rebuild scripts), which
-    makes a same-folder DB look like mass file rewrite activity to endpoint
-    security tools. Falls back to the old next-to-EXE location only if the
-    stable location isn't writable."""
-    for candidate in (STABLE_APP_DIR, PORTABLE_APP_DIR):
+    """Always place data folder next to the EXE (or script), regardless of location."""
+    candidate = PORTABLE_APP_DIR
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+        test_file = candidate / ".write_test"
+        test_file.write_text("ok", encoding="utf-8")
         try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            test_file = candidate / ".write_test"
-            test_file.write_text("ok", encoding="utf-8")
-            try:
-                test_file.unlink()
-            except Exception:
-                pass
-            if candidate == STABLE_APP_DIR:
-                _migrate_portable_data(candidate)
-            return candidate
-        except Exception as e:
-            last_err = e
-            continue
-    import tkinter as _tk, tkinter.messagebox as _mb
-    _root = _tk.Tk(); _root.withdraw()
-    _mb.showerror(
-        "Folder not writable",
-        f"Cannot write to the data folder:\n"
-        f"  {PORTABLE_APP_DIR}\n\n"
-        f"Error: {last_err}\n\n"
-        f"Please ensure the folder is writable.",
-    )
-    _root.destroy()
-    raise SystemExit(1)
+            test_file.unlink()
+        except Exception:
+            pass
+        return candidate
+    except Exception as e:
+        import tkinter as _tk, tkinter.messagebox as _mb
+        _root = _tk.Tk(); _root.withdraw()
+        _mb.showerror(
+            "Folder not writable",
+            f"Cannot write to the data folder:\n"
+            f"  {candidate}\n\n"
+            f"Error: {e}\n\n"
+            f"Please ensure the folder is writable.",
+        )
+        _root.destroy()
+        raise SystemExit(1)
 
 APP_DIR = _choose_app_dir()
 DB_PATH = APP_DIR / "inventory_variance_log.sqlite3"
