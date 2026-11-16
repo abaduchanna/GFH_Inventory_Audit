@@ -3301,7 +3301,10 @@ class MainWindow(QMainWindow):
         tab_outer.setContentsMargins(10, 10, 10, 10)
 
         controls = QGroupBox("Send Inventory Audit Status")
-        crow = QHBoxLayout(controls)
+        # Two stacked rows (filters + action buttons) - see brow below.
+        controls_col = QVBoxLayout(controls)
+        crow = QHBoxLayout()
+        controls_col.addLayout(crow)
         crow.addWidget(QLabel("Send by:"))
         self.status_send_mode_combo = QComboBox()
         self.status_send_mode_combo.addItems(["District", "Store", "Sales Rep"])
@@ -3320,6 +3323,11 @@ class MainWindow(QMainWindow):
         self.status_store_combo.activated.connect(lambda _i: self.on_status_store_change())
         crow.addWidget(self.status_store_combo)
         crow.addSpacing(6)
+        crow.addStretch(1)
+        # Buttons live on their OWN row: sharing one row with the three
+        # filter combos overflows narrow windows and Qt squeezes every
+        # button below its size hint so the text clips mid-word.
+        brow = QHBoxLayout()
         for text, fn in (("Check Current Filter", self.auto_check_status_rows),
                          ("Check Pending Only", self.auto_check_pending_status_rows),
                          ("Clear Checkmarks", self.clear_status_checkmarks),
@@ -3328,8 +3336,9 @@ class MainWindow(QMainWindow):
                          ("Open Folder", self.open_app_folder)):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
-            crow.addWidget(btn)
-        crow.addStretch(1)
+            brow.addWidget(btn)
+        brow.addStretch(1)
+        controls_col.addLayout(brow)
         tab_outer.addWidget(controls)
 
         search_box = QGroupBox("Search Inventory Audit Status")
@@ -3407,7 +3416,9 @@ class MainWindow(QMainWindow):
                 ("Copy IMEI", self.copy_selected_imei)), start=0):
             btn = QPushButton(text)
             btn.clicked.connect(fn)
-            grid.addWidget(btn, 1, col)
+            # Two button rows - 11 buttons in one grid row overflow narrow
+            # windows and Qt squeezes them until the labels clip mid-word.
+            grid.addWidget(btn, 1 if col < 6 else 2, col if col < 6 else col - 6)
         tab_outer.addWidget(send_box)
 
         action_box = QGroupBox("Final Send Actions")
