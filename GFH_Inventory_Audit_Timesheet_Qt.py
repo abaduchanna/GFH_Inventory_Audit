@@ -2962,7 +2962,7 @@ GFH_SQUARE_ICON_B64 = open(os.path.join(os.path.dirname(os.path.abspath(__file__
 # (Toplevel -> QDialog, messagebox -> QMessageBox,
 # filedialog -> QFileDialog), same behaviors; worker-thread UI updates go
 # through UIBridge(QObject) signals only.
-from PySide6.QtCore import Qt, QObject, Signal, QTimer
+from PySide6.QtCore import Qt, QObject, Signal, QTimer, QThread, QMetaObject, Slot
 from PySide6.QtGui import QIcon, QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -3152,21 +3152,57 @@ class MainWindow(QMainWindow):
     # this window behind it. These methods save the window geometry+state
     # before WhatsApp is focused and restore it after (Qt port of the Tk
     # geometry/state() pair).
+    def _on_gui_thread(self) -> bool:
+        try:
+            return QThread.currentThread() is self.thread()
+        except Exception:
+            return True
+
     def _save_window_state(self) -> dict:
         """Save the current window geometry and state (maximized/normal)
-        so it can be restored after WhatsApp steals focus."""
+        so it can be restored after WhatsApp steals focus.
+
+        Called from the WhatsApp-send worker thread. Qt widgets are not
+        thread-safe, so touching self.geometry()/self.windowState()
+        directly from that thread is undefined behavior and was freezing
+        the app. When off the GUI thread, marshal the read onto it with
+        a blocking queued invocation and wait for the result."""
+        if self._on_gui_thread():
+            return self._save_window_state_mainthread()
+        self._pending_window_state = {}
+        QMetaObject.invokeMethod(self, "_save_window_state_mainthread",
+                                  Qt.BlockingQueuedConnection)
+        return self._pending_window_state
+
+    @Slot()
+    def _save_window_state_mainthread(self) -> dict:
         try:
-            return {
+            state = {
                 "geometry": self.geometry(),
                 "state": self.windowState(),
             }
         except Exception:
-            return {}
+            state = {}
+        self._pending_window_state = state
+        return state
 
     def _restore_window_state(self, saved: dict) -> None:
         """Restore window geometry + state saved by _save_window_state.
         Called after WhatsApp finishes sending — brings the app back to
-        the exact position/size/state it was in before."""
+        the exact position/size/state it was in before.
+
+        Same cross-thread hazard as _save_window_state: setWindowState/
+        setGeometry/raise_/activateWindow must run on the GUI thread."""
+        self._pending_restore_state = saved
+        if self._on_gui_thread():
+            self._restore_window_state_mainthread()
+        else:
+            QMetaObject.invokeMethod(self, "_restore_window_state_mainthread",
+                                      Qt.BlockingQueuedConnection)
+
+    @Slot()
+    def _restore_window_state_mainthread(self) -> None:
+        saved = getattr(self, "_pending_restore_state", None)
         if not saved:
             return
         try:
