@@ -67,44 +67,85 @@ def _auto_install_packages() -> None:
     import sys as _sys
     pkgs = missing_pip
 
-    # Show a quick tk splash so the user knows something is happening
+    # Show a quick tk splash with a LIVE loading bar so the user knows
+    # something is happening — the bar fills as each package installs
     try:
         import tkinter as _tk
+        from tkinter import ttk as _ttk
         from theme_manager import ThemeManager, apply_theme_to_window, get_copyright_year
         _splash = _tk.Tk()
         _splash.title("GFH Inventory Audit — Installing packages…")
-        _splash.geometry("540x90")
+        _splash.geometry("560x150")
         _splash.resizable(False, False)
-        _lbl = _tk.Label(
+        _splash_lbl = _tk.Label(
             _splash,
-            text=f"Installing: {', '.join(pkgs)}\nPlease wait — this runs once only…",
-            font=("Segoe UI", 11), pady=18,
+            text=f"Installing: {pkgs[0]} (1/{len(pkgs)})\nPlease wait — this runs once only…",
+            font=("Segoe UI", 11), pady=12,
         )
-        _lbl.pack()
+        _splash_lbl.pack()
+        _splash_bar = _ttk.Progressbar(
+            _splash, orient="horizontal", length=500,
+            mode="determinate", maximum=100, value=0,
+        )
+        _splash_bar.pack(pady=(0, 12))
         _splash.update()
     except Exception:
         _splash = None
 
-    installers = [
-        [_sys.executable, "-m", "pip", "install", "--quiet"] + pkgs,
-        ["py", "-m", "pip", "install", "--quiet"] + pkgs,
-        ["python", "-m", "pip", "install", "--quiet"] + pkgs,
-        ["python3", "-m", "pip", "install", "--quiet"] + pkgs,
-        ["pip", "install", "--quiet"] + pkgs,
-        ["pip3", "install", "--quiet"] + pkgs,
-    ]
-    success = False
-    for cmd in installers:
+    def _splash_step(done, total, name):
+        """Live splash update — fill the loading bar, refresh the label."""
+        if _splash is None:
+            return
         try:
-            r = _sp.run(cmd, capture_output=True, timeout=180)
-            if r.returncode == 0:
-                success = True
-                break
+            _splash_lbl.config(
+                text=f"Installing: {name} ({done}/{total})\n"
+                     "Please wait — this runs once only…"
+            )
+            _splash_bar.config(value=round(done / total * 100, 1))
+            _splash.update()
         except Exception:
-            continue
+            pass
+
+    installer_bases = [
+        [_sys.executable, "-m", "pip", "install", "--quiet"],
+        ["py", "-m", "pip", "install", "--quiet"],
+        ["python", "-m", "pip", "install", "--quiet"],
+        ["python3", "-m", "pip", "install", "--quiet"],
+        ["pip", "install", "--quiet"],
+        ["pip3", "install", "--quiet"],
+    ]
+    success = True
+    _total = len(pkgs)
+    for _i, _pkg in enumerate(pkgs):
+        _splash_step(_i, _total, _pkg)
+        _ok = False
+        for _base in installer_bases:
+            try:
+                r = _sp.run(_base + [_pkg], capture_output=True, timeout=240)
+                if r.returncode == 0:
+                    _ok = True
+                    break
+            except Exception:
+                continue
+        if not _ok:
+            success = False
+            break
+        _splash_step(_i + 1, _total, _pkg)
 
     if _splash:
-        _splash.destroy()
+        try:
+            _splash_lbl.config(
+                text="All packages installed — starting the app…"
+                if success
+                else "Package install failed — showing details…"
+            )
+            if success:
+                _splash_bar.config(value=100)
+            _splash.update()
+            _splash.after(700 if success else 1200, _splash.destroy)
+            _splash.mainloop()
+        except Exception:
+            pass
 
     if not success:
         try:

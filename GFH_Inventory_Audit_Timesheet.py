@@ -118,10 +118,10 @@ def _auto_install_packages() -> None:
         _splash_style.configure("GFH.Splash.TProgressbar", troughcolor="#20294a",
                                 background="#e83030", bordercolor="#20294a",
                                 lightcolor="#e83030", darkcolor="#e83030", thickness=8)
-        _progress = _ttk.Progressbar(_splash, mode="indeterminate", length=440,
+        _progress = _ttk.Progressbar(_splash, mode="determinate", maximum=100,
+                                     value=0, length=440,
                                      style="GFH.Splash.TProgressbar")
         _progress.grid(row=2, column=0, columnspan=2, padx=32, pady=(14, 20), sticky="ew")
-        _progress.start(12)
         _splash.update_idletasks()
         _sx = max(0, (_splash.winfo_screenwidth() - _splash_width) // 2)
         _sy = max(0, (_splash.winfo_screenheight() - _splash_height) // 2)
@@ -129,33 +129,64 @@ def _auto_install_packages() -> None:
     except Exception:
         _splash = None
 
-    installer = [_sys.executable, "-m", "pip", "install", "--quiet"] + pkgs
-    result = {"success": False, "error": None}
-    def _install_missing():
+    # Aliases so the shared completion block below can drive the branded UI.
+    _splash_lbl = _status if _splash else None
+    _splash_bar = _progress if _splash else None
+
+    result = {"success": True, "error": None}
+    _total = len(pkgs)
+    for _i, _pkg in enumerate(pkgs):
         try:
-            completed = _sp.run(installer, capture_output=True, text=True, timeout=180)
-            result["success"] = completed.returncode == 0
-            result["error"] = (completed.stderr or completed.stdout or "pip exited unsuccessfully")[-1600:]
-        except Exception as exc:
-            result["error"] = str(exc)
-    _installer_thread = threading.Thread(target=_install_missing, daemon=True)
-    _installer_thread.start()
-    if _splash:
-        def _poll_installer():
-            if _installer_thread.is_alive():
-                _splash.after(100, _poll_installer)
-                return
-            _progress.stop()
-            _splash.quit()
-        _splash.protocol("WM_DELETE_WINDOW", lambda: None)
-        _splash.after(100, _poll_installer)
-        _splash.mainloop()
-    else:
-        _installer_thread.join()
+            if _splash_lbl is not None:
+                _splash_lbl.config(
+                    text=f"Installing: {_pkg} ({_i + 1}/{_total})\n"
+                         "Please wait — this runs once only…")
+            if _splash_bar is not None:
+                _splash_bar.config(value=round(_i / _total * 100, 1))
+            if _splash is not None:
+                _splash.update()
+        except Exception:
+            pass
+        _ok = False
+        for _base in ([_sys.executable, "-m", "pip", "install", "--quiet"],
+                      ["py", "-m", "pip", "install", "--quiet"],
+                      ["python", "-m", "pip", "install", "--quiet"],
+                      ["pip", "install", "--quiet"],
+                      ["pip3", "install", "--quiet"]):
+            try:
+                _r = _sp.run(_base + [_pkg], capture_output=True, timeout=240)
+                if _r.returncode == 0:
+                    _ok = True
+                    break
+            except Exception:
+                continue
+        if not _ok:
+            result = {"success": False, "error": f"pip could not install {_pkg}"}
+            break
+        try:
+            if _splash_bar is not None:
+                _splash_bar.config(value=round((_i + 1) / _total * 100, 1))
+            if _splash is not None:
+                _splash.update()
+        except Exception:
+            pass
+
     success = result["success"]
 
     if _splash:
-        _splash.destroy()
+        try:
+            _splash_lbl.config(
+                text="All packages installed — starting the app…"
+                if success
+                else "Package install failed — showing details…"
+            )
+            if success:
+                _splash_bar.config(value=100)
+            _splash.update()
+            _splash.after(700 if success else 1200, _splash.destroy)
+            _splash.mainloop()
+        except Exception:
+            pass
 
     if success:
         import os as _os
